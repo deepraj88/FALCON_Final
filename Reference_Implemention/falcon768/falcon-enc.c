@@ -597,7 +597,7 @@ int
 falcon_is_short(const int16_t *s1, const int16_t *s2,
 	unsigned logn, unsigned ter)
 {
-	if (ter) {
+//	if (ter) {
 		/*
 		 * In the ternary case, we must compute the norm in
 		 * the FFT embedding. Fortunately, this can be done
@@ -638,36 +638,36 @@ falcon_is_short(const int16_t *s1, const int16_t *s2,
 		 * scale it down for lower dimensions.
 		 */
 		return s < (int64_t)((uint32_t)100464491 >> (9 - logn));
-	} else {
-		/*
-		 * In the binary case, we use the l2-norm. Code below
-		 * uses only 32-bit operations to compute the square
-		 * of the norm with saturation to 2^32-1 if the value
-		 * exceeds 2^31-1.
-		 */
-		size_t n, u;
-		uint32_t s, ng;
-
-		n = (size_t)1 << logn;
-		s = 0;
-		ng = 0;
-		for (u = 0; u < n; u ++) {
-			int32_t z;
-
-			z = s1[u];
-			s += (uint32_t)(z * z);
-			ng |= s;
-			z = s2[u];
-			s += (uint32_t)(z * z);
-			ng |= s;
-		}
-		s |= -(ng >> 31);
-
-		/*
-		 * Acceptance bound on the l2-norm is:
-		 *   1.2*1.55*sqrt(q)*sqrt(2*N)
-		 * Value 7085 is floor((1.2^2)*(1.55^2)*2*1024).
-		 */
-		return s < (((uint32_t)7085 * (uint32_t)12289) >> (10 - logn));
-	}
+//	} else {
+//		/*
+//		 * In the binary case, we use the l2-norm. Code below
+//		 * uses only 32-bit operations to compute the square
+//		 * of the norm with saturation to 2^32-1 if the value
+//		 * exceeds 2^31-1.
+//		 */
+//		size_t n, u;
+//		uint32_t s, ng;
+//
+//		n = (size_t)1 << logn;
+//		s = 0;
+//		ng = 0;
+//		for (u = 0; u < n; u ++) {
+//			int32_t z;
+//
+//			z = s1[u];
+//			s += (uint32_t)(z * z);
+//			ng |= s;
+//			z = s2[u];
+//			s += (uint32_t)(z * z);
+//			ng |= s;
+//		}
+//		s |= -(ng >> 31);
+//
+//		/*
+//		 * Acceptance bound on the l2-norm is:
+//		 *   1.2*1.55*sqrt(q)*sqrt(2*N)
+//		 * Value 7085 is floor((1.2^2)*(1.55^2)*2*1024).
+//		 */
+//		return s < (((uint32_t)7085 * (uint32_t)12289) >> (10 - logn));
+//	}
 }

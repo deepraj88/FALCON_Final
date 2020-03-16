@@ -1,0 +1,92 @@
+<AutoPilot:ProjectResources xmlns:AutoPilot="com.autoesl.autopilot.ui.directiveView">
+    <sourceFile name="">
+        <directive functionName="mq_NTT_binary" label="" functionLabel="">
+            <pragma name="INLINE"/>
+        </directive>
+        <directive functionName="mq_iNTT_binary" label="" functionLabel="">
+            <pragma name="INLINE"/>
+        </directive>
+        <directive functionName="xor_block" label="xor_block_label2" functionLabel="">
+            <pragma name="UNROLL">
+                <option name="factor" value="4"/>
+            </pragma>
+        </directive>
+        <directive functionName="shake_extract" label="shake_extract_label3" functionLabel="">
+            <pragma name="UNROLL">
+                <option name="factor" value="4"/>
+            </pragma>
+        </directive>
+        <directive functionName="shake_flip" label="shake_flip_label4" functionLabel="">
+            <pragma name="UNROLL">
+                <option name="factor" value="4"/>
+            </pragma>
+        </directive>
+        <directive functionName="shake_init" label="shake_init_label5" functionLabel="">
+            <pragma name="UNROLL">
+                <option name="factor" value="4"/>
+            </pragma>
+        </directive>
+        <directive functionName="uncompress_static" label="uncompress_static_label8" functionLabel="">
+            <pragma name="UNROLL">
+                <option name="factor" value="4"/>
+            </pragma>
+        </directive>
+        <directive functionName="uncompress_static" label="uncompress_static_label9" functionLabel="">
+            <pragma name="UNROLL">
+                <option name="factor" value="4"/>
+            </pragma>
+        </directive>
+        <directive functionName="shake_inject" label="shake_inject_label10" functionLabel="">
+            <pragma name="UNROLL">
+                <option name="factor" value="4"/>
+            </pragma>
+        </directive>
+        <directive functionName="shake_extract" label="" functionLabel="">
+            <pragma name="ALLOCATION">
+                <option name="instances" value="shake_extract" positionalBoolean="4"/>
+                <option name="limit" value="1"/>
+                <option name="function" value="" positionalBoolean="type"/>
+            </pragma>
+        </directive>
+        <directive functionName="shake_extract" label="" functionLabel="">
+            <pragma name="INLINE"/>
+        </directive>
+        <directive functionName="shake_flip" label="" functionLabel="">
+            <pragma name="ALLOCATION">
+                <option name="instances" value="shake_flip" positionalBoolean="4"/>
+                <option name="limit" value="1"/>
+                <option name="function" value="" positionalBoolean="type"/>
+            </pragma>
+        </directive>
+        <directive functionName="shake_flip" label="" functionLabel="">
+            <pragma name="INLINE"/>
+        </directive>
+        <directive functionName="shake_inject" label="" functionLabel="">
+            <pragma name="ALLOCATION">
+                <option name="instances" value="shake_inject" positionalBoolean="4"/>
+                <option name="limit" value="1"/>
+                <option name="function" value="" positionalBoolean="type"/>
+            </pragma>
+        </directive>
+        <directive functionName="shake_inject" label="" functionLabel="">
+            <pragma name="INLINE"/>
+        </directive>
+        <directive functionName="shake_init" label="" functionLabel="">
+            <pragma name="ALLOCATION">
+                <option name="instances" value="shake_init" positionalBoolean="4"/>
+                <option name="limit" value="1"/>
+                <option name="function" value="" positionalBoolean="type"/>
+            </pragma>
+        </directive>
+        <directive functionName="shake_init" label="" functionLabel="">
+            <pragma name="INLINE"/>
+        </directive>
+        <directive functionName="process_block" label="" functionLabel="">
+            <pragma name="INLINE"/>
+        </directive>
+        <directive functionName="xor_block" label="" functionLabel="">
+            <pragma name="INLINE"/>
+        </directive>
+    </sourceFile>
+</AutoPilot:ProjectResources>
+

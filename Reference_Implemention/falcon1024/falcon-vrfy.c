@@ -816,7 +816,7 @@ mq_NTT_binary(uint16_t *a, unsigned logn)
 
 			s = GMb[m + i];
 			j2 = j1 + ht;
-			for (j = j1; j < j2; j ++) {
+			mq_NTT_binary_label0:for (j = j1; j < j2; j ++) {
 				uint32_t u, v;
 
 				u = a[j];
@@ -852,7 +852,7 @@ mq_iNTT_binary(uint16_t *a, unsigned logn)
 
 			j2 = j1 + t;
 			s = iGMb[hm + i];
-			for (j = j1; j < j2; j ++) {
+			mq_iNTT_binary_label1:for (j = j1; j < j2; j ++) {
 				uint32_t u, v, w;
 
 				u = a[j];
@@ -1053,21 +1053,21 @@ mq_iNTT_ternary(uint16_t *a, unsigned logn)
 static void
 mq_NTT(uint16_t *a, unsigned logn, int ternary)
 {
-	if (ternary) {
-		mq_NTT_ternary(a, logn);
-	} else {
+//	if (ternary) {
+//		mq_NTT_ternary(a, logn);
+//	} else {
 		mq_NTT_binary(a, logn);
-	}
+//	}
 }
 
 static void
 mq_iNTT(uint16_t *a, unsigned logn, int ternary)
 {
-	if (ternary) {
-		mq_iNTT_ternary(a, logn);
-	} else {
+//	if (ternary) {
+//		mq_iNTT_ternary(a, logn);
+//	} else {
 		mq_iNTT_binary(a, logn);
-	}
+//	}
 }
 
 /*
@@ -1140,7 +1140,7 @@ mq_poly_sub(uint16_t *f, const uint16_t *g, unsigned logn, int ternary)
  * Falcon verification context: it contains the decoded public key,
  * and the running hash context.
  */
-struct falcon_vrfy_ {
+struct falcon_vrfy {
 	shake_context sc;
 	uint16_t h[1024];
 	unsigned logn;
@@ -1148,28 +1148,28 @@ struct falcon_vrfy_ {
 };
 
 /* see falcon.h */
-falcon_vrfy *
-falcon_vrfy_new(void)
-{
-	falcon_vrfy *fv;
-
-	fv = malloc(sizeof *fv);
-	if (fv == NULL) {
-		return NULL;
-	}
-	fv->logn = 0;
-	fv->ternary = 0;
-	return fv;
-}
+//falcon_vrfy *
+//falcon_vrfy_new(void)
+//{
+//	falcon_vrfy *fv;
+//
+//	fv = malloc(sizeof *fv);
+//	if (fv == NULL) {
+//		return NULL;
+//	}
+//	fv->logn = 0;
+//	fv->ternary = 0;
+//	return fv;
+//}
 
 /* see falcon.h */
-void
-falcon_vrfy_free(falcon_vrfy *fv)
-{
-	if (fv != NULL) {
-		free(fv);
-	}
-}
+//void
+//falcon_vrfy_free(falcon_vrfy *fv)
+//{
+//	if (fv != NULL) {
+//		free(fv);
+//	}
+//}
 
 /* see falcon.h */
 int
@@ -1218,15 +1218,15 @@ falcon_vrfy_set_public_key(falcon_vrfy *fv,
 	/*
 	 * Decode public vector.
 	 */
-	if (fv->ternary) {
-		if (falcon_decode_18433(fv->h, fv->logn, buf, len) != len) {
-			goto bad_pkey;
-		}
-	} else {
+//	if (fv->ternary) {
+//		if (falcon_decode_18433(fv->h, fv->logn, buf, len) != len) {
+//			goto bad_pkey;
+//		}
+//	} else {
 		if (falcon_decode_12289(fv->h, fv->logn, buf, len) != len) {
 			goto bad_pkey;
 		}
-	}
+//	}
 
 	/*
 	 * We apply NTT and Montgomery representation immediately, since
@@ -1271,13 +1271,13 @@ falcon_vrfy_verify_raw(const uint16_t *c0, const int16_t *s2,
 	size_t u, n;
 	uint32_t q;
 
-	if (ternary) {
-		n = (size_t)3 << (logn - 1);
-		q = Qt;
-	} else {
+//	if (ternary) {
+//		n = (size_t)3 << (logn - 1);
+//		q = Qt;
+//	} else {
 		n = (size_t)1 << logn;
 		q = Qb;
-	}
+//	}
 
 	/*
 	 * Reduce s2 elements modulo q ([0..q-1] range).

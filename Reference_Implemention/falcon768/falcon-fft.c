@@ -349,7 +349,7 @@ falcon_iFFT(fpr *f, unsigned logn)
 
 /* see internal.h */
 void
-falcon_poly_add(fpr *restrict a, const fpr *restrict b, unsigned logn)
+falcon_poly_add(fpr * a, const fpr * b, unsigned logn)
 {
 	size_t n, u;
 
@@ -381,7 +381,7 @@ falcon_poly_addconst_fft(fpr *a, fpr x, unsigned logn)
 
 /* see internal.h */
 void
-falcon_poly_sub(fpr *restrict a, const fpr *restrict b, unsigned logn)
+falcon_poly_sub(fpr * a, const fpr * b, unsigned logn)
 {
 	size_t n, u;
 
@@ -435,7 +435,7 @@ falcon_poly_adj_fft(fpr *a, unsigned logn)
 
 /* see internal.h */
 void
-falcon_poly_mul_fft(fpr *restrict a, const fpr *restrict b, unsigned logn)
+falcon_poly_mul_fft(fpr * a, const fpr * b, unsigned logn)
 {
 	size_t n, hn, u;
 
@@ -471,7 +471,7 @@ falcon_poly_sqr_fft(fpr *a, unsigned logn)
 
 /* see internal.h */
 void
-falcon_poly_muladj_fft(fpr *restrict a, const fpr *restrict b, unsigned logn)
+falcon_poly_muladj_fft(fpr * a, const fpr * b, unsigned logn)
 {
 	size_t n, hn, u;
 
@@ -541,7 +541,7 @@ falcon_poly_inv_fft(fpr *a, unsigned logn)
 
 /* see internal.h */
 void
-falcon_poly_div_fft(fpr *restrict a, const fpr *restrict b, unsigned logn)
+falcon_poly_div_fft(fpr * a, const fpr * b, unsigned logn)
 {
 	size_t n, hn, u;
 
@@ -560,7 +560,7 @@ falcon_poly_div_fft(fpr *restrict a, const fpr *restrict b, unsigned logn)
 
 /* see internal.h */
 void
-falcon_poly_divadj_fft(fpr *restrict a, const fpr *restrict b, unsigned logn)
+falcon_poly_divadj_fft(fpr * a, const fpr * b, unsigned logn)
 {
 	size_t n, hn, u;
 
@@ -579,8 +579,8 @@ falcon_poly_divadj_fft(fpr *restrict a, const fpr *restrict b, unsigned logn)
 
 /* see internal.h */
 void
-falcon_poly_invnorm2_fft(fpr *restrict d,
-	const fpr *restrict a, const fpr *restrict b, unsigned logn)
+falcon_poly_invnorm2_fft(fpr * d,
+	const fpr * a, fpr * b, unsigned logn)
 {
 	size_t n, hn, u;
 
@@ -602,9 +602,9 @@ falcon_poly_invnorm2_fft(fpr *restrict d,
 
 /* see internal.h */
 void
-falcon_poly_add_muladj_fft(fpr *restrict d,
-	const fpr *restrict F, const fpr *restrict G,
-	const fpr *restrict f, const fpr *restrict g, unsigned logn)
+falcon_poly_add_muladj_fft(fpr * d,
+	const fpr * F, const fpr * G,
+	const fpr * f, const fpr * g, unsigned logn)
 {
 	size_t n, hn, u;
 
@@ -633,8 +633,8 @@ falcon_poly_add_muladj_fft(fpr *restrict d,
 
 /* see internal.h */
 void
-falcon_poly_mul_autoadj_fft(fpr *restrict a,
-	const fpr *restrict b, unsigned logn)
+falcon_poly_mul_autoadj_fft(fpr * a,
+	const fpr * b, unsigned logn)
 {
 	size_t n, hn, u;
 
@@ -648,8 +648,8 @@ falcon_poly_mul_autoadj_fft(fpr *restrict a,
 
 /* see internal.h */
 void
-falcon_poly_div_autoadj_fft(fpr *restrict a,
-	const fpr *restrict b, unsigned logn)
+falcon_poly_div_autoadj_fft(fpr * a,
+	const fpr * b, unsigned logn)
 {
 	size_t n, hn, u;
 
@@ -663,8 +663,8 @@ falcon_poly_div_autoadj_fft(fpr *restrict a,
 
 /* see internal.h */
 void
-falcon_poly_split_fft(fpr *restrict f0, fpr *restrict f1,
-	const fpr *restrict f, unsigned logn)
+falcon_poly_split_fft(fpr * f0, fpr * f1,
+	const fpr * f, unsigned logn)
 {
 	/*
 	 * The FFT representation we use is in bit-reversed order
@@ -711,8 +711,8 @@ falcon_poly_split_fft(fpr *restrict f0, fpr *restrict f1,
 
 /* see internal.h */
 void
-falcon_poly_merge_fft(fpr *restrict f,
-	const fpr *restrict f0, const fpr *restrict f1, unsigned logn)
+falcon_poly_merge_fft(fpr * f,
+	const fpr * f0, const fpr * f1, unsigned logn)
 {
 	size_t n, hn, qn, u;
 
@@ -966,7 +966,7 @@ falcon_iFFT3(fpr *a, unsigned logn, unsigned full)
 
 /* see internal.h */
 void
-falcon_poly_add3(fpr *restrict a, const fpr *restrict b,
+falcon_poly_add3(fpr * a, const fpr * b,
 	unsigned logn, unsigned full)
 {
 	size_t n, u;
@@ -979,7 +979,7 @@ falcon_poly_add3(fpr *restrict a, const fpr *restrict b,
 
 /* see internal.h */
 void
-falcon_poly_addconst3(fpr *restrict a, fpr x, unsigned logn, unsigned full)
+falcon_poly_addconst3(fpr * a, fpr x, unsigned logn, unsigned full)
 {
 	(void)logn;
 	(void)full;
@@ -988,7 +988,7 @@ falcon_poly_addconst3(fpr *restrict a, fpr x, unsigned logn, unsigned full)
 
 /* see internal.h */
 void
-falcon_poly_addconst_fft3(fpr *restrict a, fpr x, unsigned logn, unsigned full)
+falcon_poly_addconst_fft3(fpr * a, fpr x, unsigned logn, unsigned full)
 {
 	size_t n, u;
 
@@ -1000,7 +1000,7 @@ falcon_poly_addconst_fft3(fpr *restrict a, fpr x, unsigned logn, unsigned full)
 
 /* see internal.h */
 void
-falcon_poly_sub3(fpr *restrict a, const fpr *restrict b,
+falcon_poly_sub3(fpr * a, const fpr * b,
 	unsigned logn, unsigned full)
 {
 	size_t n, u;
@@ -1013,7 +1013,7 @@ falcon_poly_sub3(fpr *restrict a, const fpr *restrict b,
 
 /* see internal.h */
 void
-falcon_poly_neg3(fpr *restrict a, unsigned logn, unsigned full)
+falcon_poly_neg3(fpr * a, unsigned logn, unsigned full)
 {
 	size_t n, u;
 
@@ -1038,7 +1038,7 @@ falcon_poly_adj_fft3(fpr *a, unsigned logn, unsigned full)
 
 /* see internal.h */
 void
-falcon_poly_mul_fft3(fpr *restrict a, const fpr *restrict b,
+falcon_poly_mul_fft3(fpr * a, const fpr * b,
 	unsigned logn, unsigned full)
 {
 	size_t n, hn, u;
@@ -1075,7 +1075,7 @@ falcon_poly_sqr_fft3(fpr *a, unsigned logn, unsigned full)
 
 /* see internal.h */
 void
-falcon_poly_muladj_fft3(fpr *restrict a, const fpr *restrict b,
+falcon_poly_muladj_fft3(fpr * a, const fpr * b,
 	unsigned logn, unsigned full)
 {
 	size_t n, hn, u;
@@ -1146,7 +1146,7 @@ falcon_poly_inv_fft3(fpr *a, unsigned logn, unsigned full)
 
 /* see internal.h */
 void
-falcon_poly_div_fft3(fpr *restrict a, const fpr *restrict b,
+falcon_poly_div_fft3(fpr * a, const fpr * b,
 	unsigned logn, unsigned full)
 {
 	size_t n, hn, u;
@@ -1166,7 +1166,7 @@ falcon_poly_div_fft3(fpr *restrict a, const fpr *restrict b,
 
 /* see internal.h */
 void
-falcon_poly_divadj_fft3(fpr *restrict a, const fpr *restrict b,
+falcon_poly_divadj_fft3(fpr * a, const fpr * b,
 	unsigned logn, unsigned full)
 {
 	size_t n, hn, u;
@@ -1186,8 +1186,8 @@ falcon_poly_divadj_fft3(fpr *restrict a, const fpr *restrict b,
 
 /* see internal.h */
 void
-falcon_poly_invnorm2_fft3(fpr *restrict d,
-	const fpr *restrict a, const fpr *restrict b,
+falcon_poly_invnorm2_fft3(fpr * d,
+	const fpr * a, const fpr * b,
 	unsigned logn, unsigned full)
 {
 	size_t n, hn, u;
@@ -1210,9 +1210,9 @@ falcon_poly_invnorm2_fft3(fpr *restrict d,
 
 /* see internal.h */
 void
-falcon_poly_add_muladj_fft3(fpr *restrict d,
-	const fpr *restrict F, const fpr *restrict G,
-	const fpr *restrict f, const fpr *restrict g,
+falcon_poly_add_muladj_fft3(fpr * d,
+	const fpr * F, const fpr * G,
+	const fpr * f, const fpr * g,
 	unsigned logn, unsigned full)
 {
 	size_t n, hn, u;
@@ -1242,8 +1242,8 @@ falcon_poly_add_muladj_fft3(fpr *restrict d,
 
 /* see internal.h */
 void
-falcon_poly_mul_autoadj_fft3(fpr *restrict a,
-	const fpr *restrict b, unsigned logn, unsigned full)
+falcon_poly_mul_autoadj_fft3(fpr * a,
+	const fpr * b, unsigned logn, unsigned full)
 {
 	size_t n, hn, u;
 
@@ -1257,8 +1257,8 @@ falcon_poly_mul_autoadj_fft3(fpr *restrict a,
 
 /* see internal.h */
 void
-falcon_poly_div_autoadj_fft3(fpr *restrict a,
-	const fpr *restrict b, unsigned logn, unsigned full)
+falcon_poly_div_autoadj_fft3(fpr * a,
+	const fpr * b, unsigned logn, unsigned full)
 {
 	size_t n, hn, u;
 
@@ -1273,8 +1273,8 @@ falcon_poly_div_autoadj_fft3(fpr *restrict a,
 /* see internal.h */
 void
 falcon_poly_split_top_fft3(
-	fpr *restrict f0, fpr *restrict f1, fpr *restrict f2,
-	const fpr *restrict f, unsigned logn)
+	fpr * f0, fpr * f1, fpr * f2,
+	const fpr * f, unsigned logn)
 {
 	size_t n, hn, qn, u, v;
 
@@ -1323,8 +1323,8 @@ falcon_poly_split_top_fft3(
 
 /* see internal.h */
 void
-falcon_poly_split_deep_fft3(fpr *restrict f0, fpr *restrict f1,
-	const fpr *restrict f, unsigned logn)
+falcon_poly_split_deep_fft3(fpr * f0, fpr * f1,
+	const fpr * f, unsigned logn)
 {
 	size_t n, hn, qn, u, m;
 
@@ -1371,8 +1371,8 @@ falcon_poly_split_deep_fft3(fpr *restrict f0, fpr *restrict f1,
 
 /* see internal.h */
 void
-falcon_poly_merge_top_fft3(fpr *restrict f,
-	const fpr *restrict f0, const fpr *restrict f1, const fpr *restrict f2,
+falcon_poly_merge_top_fft3(fpr * f,
+	const fpr * f0, const fpr * f1, const fpr * f2,
 	unsigned logn)
 {
 	size_t n, hn, qn, u, v;
@@ -1413,8 +1413,8 @@ falcon_poly_merge_top_fft3(fpr *restrict f,
 
 /* see internal.h */
 void
-falcon_poly_merge_deep_fft3(fpr *restrict f,
-	const fpr *restrict f0, const fpr *restrict f1, unsigned logn)
+falcon_poly_merge_deep_fft3(fpr * f,
+	const fpr * f0, const fpr * f1, unsigned logn)
 {
 	size_t n, hn, qn, u, m;
 

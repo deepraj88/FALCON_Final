@@ -12,13 +12,13 @@
 #define PARAM_TERNARY   1
 #define PARAM_NONCE     40
 
-void randombytes_init(unsigned char *entropy_input,
-	unsigned char *personalization_string,
-	int security_strength);
-int randombytes(unsigned char *x, unsigned long long xlen);
+//void randombytes_init(unsigned char *entropy_input,
+//	unsigned char *personalization_string,
+//	int security_strength);
+//int randombytes(unsigned char *x, unsigned long long xlen);
 
 int
-crypto_sign_keypair(unsigned char *pk, unsigned char *sk)
+crypto_sign_keypair(unsigned char pk[CRYPTO_PUBLICKEYBYTES], unsigned char sk[CRYPTO_SECRETKEYBYTES])
 {
 	falcon_keygen *fk;
 	unsigned char seed[48];
@@ -40,11 +40,12 @@ crypto_sign_keypair(unsigned char *pk, unsigned char *sk)
 	falcon_keygen_free(fk);
 	return r > 0 ? 0 : -1;
 }
-
-int
-crypto_sign(unsigned char *sm, unsigned long long *smlen,
-	const unsigned char *m, unsigned long long mlen,
-	const unsigned char *sk)
+//#endif
+//
+#ifdef ONLY_SIGN
+int crypto_sign(unsigned char sm[100+CRYPTO_BYTES], unsigned long long smlen[1],
+	const unsigned char m[100], unsigned long long mlen,
+	const unsigned char sk[CRYPTO_SECRETKEYBYTES])
 {
 	falcon_sign *fs;
 	unsigned char seed[48];
@@ -107,22 +108,28 @@ exit_crypto_sign:
 	falcon_sign_free(fs);
 	return r;
 }
-
-int
-crypto_sign_open(unsigned char *m, unsigned long long *mlen,
-	const unsigned char *sm, unsigned long long smlen,
-	const unsigned char *pk)
+#endif
+//
+//#ifdef ONLY_SIGN_OPEN
+int crypto_sign_open(unsigned char m[3300], unsigned long long mlen[1],
+	const unsigned char sm[3300+CRYPTO_BYTES], unsigned long long smlen,
+	const unsigned char pk[CRYPTO_PUBLICKEYBYTES])
 {
-	falcon_vrfy *fv;
+	falcon_vrfy fv[1];
 	int r;
+	int loop;
 	const unsigned char *sig, *msg;
 	size_t sig_len, msg_len;
 
+	fv[0].logn = 0;
+	fv[0].ternary = 0;
+
+        //fv = malloc(sizeof *fv);
 	r = -1;
-	fv = falcon_vrfy_new();
-	if (fv == NULL) {
-		goto exit_crypto_sign_open;
-	}
+//	fv = falcon_vrfy_new();
+//	if (fv == NULL) {
+//		goto exit_crypto_sign_open;
+//	}
 	if (!falcon_vrfy_set_public_key(fv, pk, CRYPTO_PUBLICKEYBYTES)) {
 		goto exit_crypto_sign_open;
 	}
@@ -140,11 +147,13 @@ crypto_sign_open(unsigned char *m, unsigned long long *mlen,
 	falcon_vrfy_update(fv, msg, msg_len);
 	if (falcon_vrfy_verify(fv, sig, sig_len) > 0) {
 		r = 0;
-		memcpy(m, msg, msg_len);
+		//memcpy(m, msg, msg_len);
+		for(loop=0;loop<msg_len;loop++)
+			m[loop]=msg[loop];
 		*mlen = msg_len;
 	}
 
 exit_crypto_sign_open:
-	falcon_vrfy_free(fv);
-	return r;
+//	falcon_vrfy_free(fv);
+return r;
 }

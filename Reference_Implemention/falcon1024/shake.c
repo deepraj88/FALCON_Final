@@ -98,7 +98,7 @@ xor_block(uint64_t *A, const void *data, size_t rate)
 {
 	size_t u;
 
-	for (u = 0; u < rate; u += 8) {
+	xor_block_label2:for (u = 0; u < rate; u += 8) {
 		A[u >> 3] ^= dec64le((const unsigned char *)data + u);
 	}
 }
@@ -516,9 +516,12 @@ process_block(uint64_t *A)
 void
 shake_init(shake_context *sc, int capacity)
 {
+	int loop;
 	sc->rate = 200 - (size_t)(capacity >> 3);
 	sc->dptr = 0;
-	memset(sc->A, 0, sizeof sc->A);
+	//memset(sc->A, 0, sizeof sc->A);
+	shake_init_label5:for(loop=0;loop<sizeof(sc->A)/8;loop++)
+		sc->A[loop] = 0;
 	sc->A[ 1] = ~(uint64_t)0;
 	sc->A[ 2] = ~(uint64_t)0;
 	sc->A[ 8] = ~(uint64_t)0;
@@ -533,6 +536,7 @@ shake_inject(shake_context *sc, const void *data, size_t len)
 {
 	const unsigned char *buf;
 	size_t rate, dptr;
+	int loop;
 
 	buf = data;
 	rate = sc->rate;
@@ -544,7 +548,9 @@ shake_inject(shake_context *sc, const void *data, size_t len)
 		if (clen > len) {
 			clen = len;
 		}
-		memcpy(sc->dbuf + dptr, buf, clen);
+//		memcpy(sc->dbuf + dptr, buf, clen);
+		shake_inject_label10:for(loop=0;loop<clen;loop++)
+			sc->dbuf[dptr+loop] = buf[loop];
 		dptr += clen;
 		buf += clen;
 		len -= clen;
@@ -561,6 +567,7 @@ shake_inject(shake_context *sc, const void *data, size_t len)
 void
 shake_flip(shake_context *sc)
 {
+	int loop;
 	/*
 	 * We apply padding and pre-XOR the value into the state. We
 	 * set dptr to the end of the buffer, so that first call to
@@ -570,7 +577,9 @@ shake_flip(shake_context *sc)
 		sc->dbuf[sc->dptr ++] = 0x9F;
 	} else {
 		sc->dbuf[sc->dptr ++] = 0x1F;
-		memset(sc->dbuf + sc->dptr, 0x00, sc->rate - sc->dptr - 1);
+		//memset(sc->dbuf + sc->dptr, 0x00, sc->rate - sc->dptr - 1);
+		shake_flip_label4:for(loop=0;loop<sc->rate -  sc->dptr - 1;loop++)
+			*(sc->dbuf + sc->dptr+loop) = 0;
 		sc->dbuf[sc->rate - 1] = 0x80;
 		sc->dptr = sc->rate;
 	}
@@ -579,10 +588,11 @@ shake_flip(shake_context *sc)
 
 /* see falcon.h */
 void
-shake_extract(shake_context *sc, void *out, size_t len)
+shake_extract(shake_context *sc, unsigned char *out, size_t len)
 {
 	unsigned char *buf;
 	size_t dptr, rate;
+	int loop;
 
 	buf = out;
 	dptr = sc->dptr;
@@ -628,7 +638,9 @@ shake_extract(shake_context *sc, void *out, size_t len)
 		if (clen > len) {
 			clen = len;
 		}
-		memcpy(buf, sc->dbuf + dptr, clen);
+		//memcpy(buf, sc->dbuf + dptr, clen);
+		shake_extract_label3:for(loop=0;loop<clen;loop++)
+			buf[loop] = sc->dbuf[dptr+loop];
 		dptr += clen;
 		buf += clen;
 		len -= clen;

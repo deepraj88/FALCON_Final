@@ -338,7 +338,7 @@ compress_static(void *out, size_t max_out_len,
 		ne = w >> j;
 		acc = (acc << (j + 1)) | lo;
 		acc_len += j + 1;
-		while (acc_len >= 8) {
+		compress_static_label6:while (acc_len >= 8) {
 			acc_len -= 8;
 			if (buf != NULL) {
 				if (u >= max_out_len) {
@@ -352,7 +352,7 @@ compress_static(void *out, size_t max_out_len,
 		/*
 		 * Second part: 'ne' bits of value 0, and one bit of value 1.
 		 */
-		while (ne -- >= 0) {
+		compress_static_label7:while (ne -- >= 0) {
 			acc <<= 1;
 			acc += ((unsigned)ne >> 15) & 1;
 			if (++ acc_len == 8) {
@@ -489,7 +489,7 @@ uncompress_static(int16_t *x, unsigned logn,
 		 * Read next byte(s) for the sign bit and the low j bits
 		 * of the absolute value of the next integer.
 		 */
-		while (db_len <= j) {
+		uncompress_static_label9:while (db_len <= j) {
 			if (v >= len) {
 				return 0;
 			}
@@ -503,7 +503,7 @@ uncompress_static(int16_t *x, unsigned logn,
 		/*
 		 * Read subsequent bits until next '1' (inclusive).
 		 */
-		for (ne = 0;; ne ++) {
+		uncompress_static_label8:for (ne = 0;; ne ++) {
 			unsigned bit;
 
 			if (db_len == 0) {
@@ -597,48 +597,48 @@ int
 falcon_is_short(const int16_t *s1, const int16_t *s2,
 	unsigned logn, unsigned ter)
 {
-	if (ter) {
-		/*
-		 * In the ternary case, we must compute the norm in
-		 * the FFT embedding. Fortunately, this can be done
-		 * without computing the FFT.
-		 */
-		size_t n, hn, u;
-		int64_t s;
-
-		n = (size_t)3 << (logn - 1);
-		hn = n >> 1;
-		s = 0;
-		for (u = 0; u < n; u ++) {
-			int32_t z;
-
-			z = s1[u];
-			s += z * z;
-			z = s2[u];
-			s += z * z;
-		}
-		for (u = 0; u < hn; u ++) {
-			s += (int32_t)s1[u] * (int32_t)s1[u + hn];
-			s += (int32_t)s2[u] * (int32_t)s2[u + hn];
-		}
-
-		/*
-		 * If the norm is v, then we computed (v^2)/N (in s).
-		 */
-
-		/*
-		 * Acceptance bound on the embedding norm is:
-		 *   b = 1.2*1.32*2*N*sqrt(q/sqrt(2))
-		 *
-		 * Since we computed (v^2)/N, we must compare it with:
-		 *   (b^2)/N = ((1.2*1.32*2)^2/sqrt(2))*q*N
-		 *           = (3*(1.2*1.32*2)^2/sqrt(2))*q*2^(logn-1)
-		 *
-		 * We use 100464491 = floor((b^2)/N) when N = 768, and
-		 * scale it down for lower dimensions.
-		 */
-		return s < (int64_t)((uint32_t)100464491 >> (9 - logn));
-	} else {
+//	if (ter) {
+//		/*
+//		 * In the ternary case, we must compute the norm in
+//		 * the FFT embedding. Fortunately, this can be done
+//		 * without computing the FFT.
+//		 */
+//		size_t n, hn, u;
+//		int64_t s;
+//
+//		n = (size_t)3 << (logn - 1);
+//		hn = n >> 1;
+//		s = 0;
+//		for (u = 0; u < n; u ++) {
+//			int32_t z;
+//
+//			z = s1[u];
+//			s += z * z;
+//			z = s2[u];
+//			s += z * z;
+//		}
+//		for (u = 0; u < hn; u ++) {
+//			s += (int32_t)s1[u] * (int32_t)s1[u + hn];
+//			s += (int32_t)s2[u] * (int32_t)s2[u + hn];
+//		}
+//
+//		/*
+//		 * If the norm is v, then we computed (v^2)/N (in s).
+//		 */
+//
+//		/*
+//		 * Acceptance bound on the embedding norm is:
+//		 *   b = 1.2*1.32*2*N*sqrt(q/sqrt(2))
+//		 *
+//		 * Since we computed (v^2)/N, we must compare it with:
+//		 *   (b^2)/N = ((1.2*1.32*2)^2/sqrt(2))*q*N
+//		 *           = (3*(1.2*1.32*2)^2/sqrt(2))*q*2^(logn-1)
+//		 *
+//		 * We use 100464491 = floor((b^2)/N) when N = 768, and
+//		 * scale it down for lower dimensions.
+//		 */
+//		return s < (int64_t)((uint32_t)100464491 >> (9 - logn));
+//	} else {
 		/*
 		 * In the binary case, we use the l2-norm. Code below
 		 * uses only 32-bit operations to compute the square
@@ -669,5 +669,5 @@ falcon_is_short(const int16_t *s1, const int16_t *s2,
 		 * Value 7085 is floor((1.2^2)*(1.55^2)*2*1024).
 		 */
 		return s < (((uint32_t)7085 * (uint32_t)12289) >> (10 - logn));
-	}
+//	}
 }

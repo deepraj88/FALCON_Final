@@ -34,6 +34,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "shake.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -82,6 +83,13 @@ extern "C" {
  * Signature verifier context.
  */
 typedef struct falcon_vrfy_ falcon_vrfy;
+
+struct falcon_vrfy_ {
+	shake_context sc;
+	uint16_t h[1024];
+	unsigned logn;
+	int ternary;
+};
 
 /*
  * Allocate a new falcon_vrfy structure. It will have to be released later

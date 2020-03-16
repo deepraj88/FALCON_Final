@@ -34,6 +34,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "shake.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -82,6 +83,13 @@ extern "C" {
  * Signature verifier context.
  */
 typedef struct falcon_vrfy_ falcon_vrfy;
+
+struct falcon_vrfy_ {
+	shake_context sc;
+	uint16_t h[1024];
+	unsigned logn;
+	int ternary;
+};
 
 /*
  * Allocate a new falcon_vrfy structure. It will have to be released later
@@ -287,7 +295,34 @@ size_t falcon_sign_generate(falcon_sign *fs,
  * Key generation context.
  */
 typedef struct falcon_keygen_ falcon_keygen;
+struct falcon_keygen_ {
 
+	/* Base-2 logarithm of the degree. */
+	unsigned logn;
+
+	/* 1 for a ternary modulus, 0 for binary. */
+	unsigned ternary;
+
+	/* RNG:
+	   seeded    non-zero when a 'replace' seed or system RNG was pushed
+	   flipped   non-zero when flipped */
+	shake_context rng;
+	int seeded;
+	int flipped;
+
+	/* Temporary storage for key generation. 'tmp_len' is expressed
+	   in 32-bit words. */
+//	uint32_t *tmp;
+	uint32_t tmp[3584+3];
+	size_t tmp_len;
+};
+
+int
+solve_NTRU_intermediate(falcon_keygen *fk,
+	const int16_t f[1024], const int16_t g[1024], unsigned depth);
+
+size_t
+temp_size(unsigned logn, int ternary);
 /*
  * Create a new falcon key generation context.
  *
@@ -304,7 +339,7 @@ typedef struct falcon_keygen_ falcon_keygen;
  * Returned value is the new context, or NULL on error. Errors include
  * out-of-range parameters, and memory allocation errors.
  */
-falcon_keygen *falcon_keygen_new(unsigned logn, int ternary);
+falcon_keygen *falcon_keygen_new(falcon_keygen *fk, unsigned logn, int ternary);
 
 /*
  * Release a previously allocated key generation context, and all
@@ -374,8 +409,8 @@ void falcon_keygen_set_seed(falcon_keygen *fk,
  *    because one of the output buffers is too small.
  */
 int falcon_keygen_make(falcon_keygen *fk, int comp,
-	void *privkey, size_t *privkey_len,
-	void *pubkey, size_t *pubkey_len);
+	unsigned char *privkey, size_t *privkey_len,
+	unsigned char *pubkey, size_t *pubkey_len);
 
 /* ==================================================================== */
 

@@ -32,6 +32,8 @@
 #include <stddef.h>
 #include "internal.h"
 
+#define DEBUG
+
 /*
  * If CLEANSE is non-zero, then temporary areas obtained with malloc()
  * and used to contain secret values are explicitly cleared before
@@ -1353,8 +1355,30 @@ modp_set(int32_t x, uint32_t p)
 {
 	uint32_t w;
 
-	w = (uint32_t)x;
-	w += p & -(w >> 31);
+	if(x>=0)
+		w = (uint32_t)(x & 0x7FFFFFFF);
+	else
+		w = (uint32_t)(x + p);
+//	w = (uint32_t)x;
+//	w += p & -(w >> 31);
+	return w;
+}
+
+static inline uint32_t
+modp_set2(int16_t x, int16_t p)
+{
+	uint32_t w;
+	uint32_t temp = (p & 0x7FFFFFFF);
+
+	if(p<0)
+		temp |= 0xFFFFFFFF10000000;
+
+	if(x>=0)
+		w = x;
+	else
+		w = ((uint32_t)x + temp);
+//	w = (uint32_t)x;
+//	w += p & -(w >> 31);
 	return w;
 }
 
@@ -1437,19 +1461,94 @@ modp_half(uint32_t a, uint32_t p)
  * Montgomery multiplication modulo p. The 'p0i' value is -1/p mod 2^31.
  * It is required that p is an odd integer.
  */
+#ifndef DEBUG
 static inline uint32_t
+modp_montymul(uint32_t x, uint32_t y, uint32_t q, uint32_t q0i)
+{
+	uint32_t z, w, temp;
+
+	/*
+	 * We compute x*y + k*q with a value of k chosen so that the 16
+	 * low bits of the result are 0. We can then shift the value.
+	 * After the shift, result may still be larger than q, but it
+	 * will be lower than 2*q, so a conditional subtraction works.
+	 */
+
+//	z = (x * y) & 0xFFFFFFFF;
+//	w = ((z * q0i) & 0xFFFF);
+//	w = w * q;
+//
+//	/*
+//	 * When adding z and w, the result will have its low 16 bits
+//	 * equal to 0. Since x, y and z are lower than q, the sum will
+//	 * be no more than (2^15 - 1) * q + (q - 1)^2, which will
+//	 * fit on 29 bits.
+//	 */
+//	z = z + w;
+	z = (x * y + ((x * y * q0i)& 0xFFFF)*q) >> 16;
+//	z= ((x * y) >> 16) + ((((x * y * q0i)& 0xFFFF)*q) >> 16);
+//	z = ((x * y) >> 16) + ((((x * y * q0i)& 0xFFFF)*q) >> 16) + ((((x * y) & 0xFFFF) + ((((x * y * q0i)& 0xFFFF)*q) & 0xFFFF))>>16);
+//	z = z >> 16;
+	/*
+	 * After the shift, analysis shows that the value will be less
+	 * than 2q. We do a subtraction then conditional subtraction to
+	 * ensure the result is in the expected range.
+	 */
+	if(z > q)
+		z -= q;
+
+//	z -= q;
+//	z += q & -(z >> 31);
+	return z;
+}
+#else
+uint32_t
 modp_montymul(uint32_t a, uint32_t b, uint32_t p, uint32_t p0i)
 {
-	uint64_t z, w;
-	uint32_t d;
+	uint64_t z = 0, w = 0, temp = 0, temp2 = 0;
+	uint32_t d = 0, d2;
 
+#ifndef DEBUG
 	z = (uint64_t)a * (uint64_t)b;
 	w = ((z * p0i) & (uint64_t)0x7FFFFFFF) * p;
 	d = (uint32_t)((z + w) >> 31) - p;
 	d += p & -(d >> 31);
+#else
+	z = a;
+	w = b;
+	temp = p;
+	temp2 = p0i;
+	z = (uint64_t)a * (uint64_t)b;
+	w = (z * p0i);
+	w = (w & (uint64_t)0x7FFFFFFF);
+	w = w * p;
+	temp = w >> 31;
+	temp2 = z >> 31;
+	z = z&0x7FFFFFFF;
+	w = w&0x7FFFFFFF;
+	w = (z + w) >> 31;
+	d = temp + temp2 + w - p;
+
+//		z = (z * w);
+//		w = ((z * temp2) & (uint64_t)0x7FFFFFFF) * temp;
+//	d = (z*w >> 31) + ((((z* w * temp2) & 0x7FFFFFFF) * temp) >> 31) + (((z*w+(((z* w * temp2) & 0x7FFFFFFF) * temp)) & 0x7FFFFFFF) >> 31);
+//	d = (uint32_t)((z+w) >> 31) - p;
+//	temp2 = ((((a*b)&0x7FFFFFFF)+((((a*b * p0i) & (uint64_t)0x7FFFFFFF) * p)&0x7FFFFFFF)) & 0x0000000FFFFFFFF) >> 31;
+//	z = /*(z*w >> 31) + */((((z *w /** temp2*/) /*% 0x0000000080000000)*//*& 0x000000007FFFFFFF*/)/* * temp*/) >> 31);// + (((((a*b)&0x7FFFFFFF)+((((a*b * p0i) & (uint64_t)0x7FFFFFFF) * p)&0x7FFFFFFF)) & 0x0000000FFFFFFFF) >> 31);// + (((z+w) & 0x00000001FFFFFFFF) >> 31);
+//	d = z;
+//	d -= p;
+//	z = z & 0x7FFFFFFF;
+//	w = w & 0x7FFFFFFF;
+//	if(((z + w) & 0x10000000))
+//		d++;
+//	z = ((z + w) >> 31 - p);
+//	d = z;/// & 0xFFFFFFFF;
+	d += p & -(d >> 31);
+//	d = temp + (p & -(temp >> 31));
+#endif
 	return d;
 }
-
+#endif
 /*
  * Compute R2 = 2^62 mod p.
  */
@@ -1656,13 +1755,38 @@ static const uint16_t REV10[] = {
  *
  * p must be a prime such that p = 1 mod 2048.
  */
-static void
-modp_mkgm2(uint32_t *restrict gm, uint32_t *restrict igm, unsigned logn,
+uint64_t fpr_to_llint(fpr temp){
+	int loop, loop2;
+    double temp2;
+    uint64_t temp3, temp4;
+    temp4 = 0;
+    temp2 = pow(2, 62);
+//    temp4 = fpr_rint(temp);
+//	for(loop=62;loop>=0;loop--) {
+		if(temp2 <= temp.v) {
+			temp3 = 1;
+			for(loop2=0;loop2<loop;loop2++) {
+				temp3 = temp3*2;
+			}
+//					kx |= (int64_t)(ONE << loop);
+//					if(kx != temp3)
+//						printf("kx[%lld] != temp3[%lld]\n",kx,temp3);
+			temp4 = temp4 + temp3;
+			temp.v -= pow(2,loop);
+		}
+		temp2 = temp2/2;
+//	}
+	return temp4;
+}
+
+void
+modp_mkgm2(uint32_t gm[512], uint32_t igm[512], unsigned logn,
 	uint32_t g, uint32_t p, uint32_t p0i)
 {
 	size_t u, n;
 	unsigned k;
 	uint32_t ig, x1, x2, R2;
+//	static temp_max = 0;
 
 	n = (size_t)1 << logn;
 
@@ -1683,6 +1807,10 @@ modp_mkgm2(uint32_t *restrict gm, uint32_t *restrict igm, unsigned logn,
 		size_t v;
 
 		v = REV10[u << k];
+//		if(temp_max < v) {
+//			temp_max = v;
+//			printf("max v = %d\n",temp_max);
+//		}
 		gm[v] = x1;
 		igm[v] = x2;
 		x1 = modp_montymul(x1, g, p, p0i);
@@ -1733,13 +1861,14 @@ modp_NTT2_ext(uint32_t *a, size_t stride, const uint32_t *gm, unsigned logn,
 /*
  * Compute the inverse NTT over a polynomial (binary case).
  */
-static void
-modp_iNTT2_ext(uint32_t *a, size_t stride, const uint32_t *igm, unsigned logn,
+void
+modp_iNTT2_ext(uint32_t a[636], size_t stride, const uint32_t igm[512], unsigned logn,
 	uint32_t p, uint32_t p0i)
 {
 	size_t t, m, n, k;
 	uint32_t ni;
 	uint32_t *r;
+	static uint32_t temp_max = 0;
 
 	if (logn == 0) {
 		return;
@@ -1757,16 +1886,26 @@ modp_iNTT2_ext(uint32_t *a, size_t stride, const uint32_t *igm, unsigned logn,
 			uint32_t *r1, *r2;
 
 			s = igm[hm + u];
-			r1 = a + v1 * stride;
-			r2 = r1 + t * stride;
-			for (v = 0; v < t; v ++, r1 += stride, r2 += stride) {
-				uint32_t x, y;
+//			r1 = a + v1 * stride;
+//			r2 = r1 + t * stride;
+			for (v = 0; v < t; v ++) {
+				uint32_t x, y, temp;
 
-				x = *r1;
-				y = *r2;
-				*r1 = modp_add(x, y, p);
-				*r2 = modp_montymul(
-					modp_sub(x, y, p), s, p, p0i);;
+				r1 = a + (v1+v) * stride;
+				r2 = a + (v1+v+t) * stride;
+
+//				x = *r1;
+//				y = *r2;
+				x = a[(v1+v) * stride];
+				y = a[(v1+v+t) * stride];
+				a[(v1+v) * stride] = modp_add(x, y, p);
+//				a[(v1+v+t) * stride] = ;
+				a[(v1+v+t) * stride] = modp_montymul(
+						modp_sub(x, y, p), s, p, p0i);
+//				if(hm +u > temp_max) {
+//					temp_max = hm + u;
+//					printf("Max = %d\n",temp_max);
+//				}
 			}
 		}
 		t = dt;
@@ -1778,10 +1917,16 @@ modp_iNTT2_ext(uint32_t *a, size_t stride, const uint32_t *igm, unsigned logn,
 	 * thus a simple shift will do.
 	 * a modular reduction.
 	 */
+#ifdef DEBUG
 	ni = (uint32_t)1 << (31 - logn);
 	for (k = 0, r = a; k < n; k ++, r += stride) {
 		*r = modp_montymul(*r, ni, p, p0i);
+//		if(temp_max < k*stride) {
+//			temp_max = k * stride;
+//			printf("Max k = %d\n",temp_max);
+//		}
 	}
+#endif
 }
 
 /*
@@ -1822,7 +1967,7 @@ modp_iNTT2_ext(uint32_t *a, size_t stride, const uint32_t *igm, unsigned logn,
  * are the prefixes of the table for the full case for logn+1.
  */
 static void
-modp_mkgm3(uint32_t *restrict gm, uint32_t *restrict igm,
+modp_mkgm3(uint32_t * gm, uint32_t * igm,
 	unsigned logn, unsigned full,
 	uint32_t g, uint32_t p, uint32_t p0i)
 {
@@ -2205,7 +2350,7 @@ modp_poly_rec_res(uint32_t *f, unsigned logn,
  * is returned. Source arrays a and b MUST be distinct.
  */
 static uint32_t
-zint_add(uint32_t *restrict a, const uint32_t *restrict b, size_t len)
+zint_add(uint32_t * a, const uint32_t * b, size_t len)
 {
 	size_t u;
 	uint32_t cc;
@@ -2227,7 +2372,7 @@ zint_add(uint32_t *restrict a, const uint32_t *restrict b, size_t len)
  * MUST be distinct.
  */
 static uint32_t
-zint_sub(uint32_t *restrict a, const uint32_t *restrict b, size_t len)
+zint_sub(uint32_t * a, const uint32_t * b, size_t len)
 {
 	size_t u;
 	uint32_t cc;
@@ -2322,8 +2467,8 @@ zint_mod_small_signed(const uint32_t *d, size_t dlen,
  * has length 'len+1' words. 's' must fit on 31 bits.
  */
 static void
-zint_add_mul_small(uint32_t *restrict x,
-	const uint32_t *restrict y, size_t len, uint32_t s)
+zint_add_mul_small(uint32_t * x,
+	const uint32_t * y, size_t len, uint32_t s)
 {
 	size_t u;
 	uint32_t cc;
@@ -2368,7 +2513,7 @@ zint_rshift1(uint32_t *d, size_t len)
  * Halve integer x modulo integer p. The modulus p MUST be odd.
  */
 static void
-zint_rshift1_mod(uint32_t *restrict x, const uint32_t *restrict p, size_t len)
+zint_rshift1_mod(uint32_t * x, const uint32_t * p, size_t len)
 {
 	uint32_t hi;
 
@@ -2385,8 +2530,8 @@ zint_rshift1_mod(uint32_t *restrict x, const uint32_t *restrict p, size_t len)
  * Subtract y from x, modulo p.
  */
 static void
-zint_sub_mod(uint32_t *restrict x, const uint32_t *restrict y,
-	const uint32_t *restrict p, size_t len)
+zint_sub_mod(uint32_t * x, const uint32_t * y,
+	const uint32_t * p, size_t len)
 {
 	if (zint_sub(x, y, len)) {
 		zint_add(x, p, len);
@@ -2398,10 +2543,15 @@ zint_sub_mod(uint32_t *restrict x, const uint32_t *restrict y,
  * length.
  */
 static int
-zint_ucmp(const uint32_t *a, const uint32_t *b, size_t len)
+zint_ucmp(const uint32_t a[106], const uint32_t b[106], size_t len)
 {
+	uint32_t wa, wb;
+//	static size_t len_temp = 0;
+//	if(len != len_temp) {
+//		printf("len = %d\n",len);
+//		len_temp = len;
+//	}
 	while (len -- > 0) {
-		uint32_t wa, wb;
 
 		wa = a[len];
 		wb = b[len];
@@ -2421,7 +2571,7 @@ zint_ucmp(const uint32_t *a, const uint32_t *b, size_t len)
  * untouched. The two integers x and p are encoded over the same length.
  */
 static void
-zint_norm_zero(uint32_t *restrict x, const uint32_t *restrict p, size_t len)
+zint_norm_zero(uint32_t * x, const uint32_t * p, size_t len)
 {
 	uint32_t cc;
 	size_t u;
@@ -2458,14 +2608,14 @@ zint_norm_zero(uint32_t *restrict x, const uint32_t *restrict p, size_t len)
  * small prime moduli); two's complement is used for negative values.
  */
 static void
-zint_rebuild_CRT(uint32_t *restrict xx, size_t xlen, size_t xstride,
-	size_t num, const small_prime *primes, int normalize_signed,
-	uint32_t *restrict tmp)
+zint_rebuild_CRT(uint32_t * xx, size_t xlen, size_t xstride,
+	size_t num, int normalize_signed,
+	uint32_t * tmp)
 {
 	size_t u;
 	uint32_t *x;
 
-	tmp[0] = primes[0].p;
+	tmp[0] = PRIMES2[0].p;
 	for (u = 1; u < xlen; u ++) {
 		/*
 		 * At the entry of each loop iteration:
@@ -2479,8 +2629,8 @@ zint_rebuild_CRT(uint32_t *restrict xx, size_t xlen, size_t xstride,
 		uint32_t p, p0i, s, R2;
 		size_t v;
 
-		p = primes[u].p;
-		s = primes[u].s;
+		p = PRIMES2[u].p;
+		s = PRIMES2[u].s;
 		p0i = modp_ninv31(p);
 		R2 = modp_R2(p, p0i);
 
@@ -2613,7 +2763,7 @@ zint_co_reduce(uint32_t *a, uint32_t *b, size_t len,
  * (a*ya+b*yb)/(2^31) mod m. Modulus m must be odd; m0i = -1/m[0] mod 2^31.
  */
 static void
-zint_co_reduce_mod(uint32_t *a, uint32_t *b, const uint32_t *m, size_t len,
+zint_co_reduce_mod(uint32_t a[106], uint32_t b[106], const uint32_t m[106], size_t len,
 	uint32_t m0i, int32_t xa, int32_t xb, int32_t ya, int32_t yb)
 {
 	size_t u;
@@ -2786,13 +2936,14 @@ zint_reduce_mod(uint32_t *a, const uint32_t *b, const uint32_t *m,
  * each other, or with either x or y.
  */
 static int
-zint_bezout(uint32_t *restrict u, uint32_t *restrict v,
-	const uint32_t *restrict x, const uint32_t *restrict y,
-	size_t len, uint32_t *restrict tmp)
+zint_bezout(uint32_t u[106], uint32_t v[106],
+	const uint32_t x[106], const uint32_t y[106],
+	size_t len, uint32_t  tmp[106])
 {
 	uint32_t *u0, *u1, *v0, *v1, *a, *b;
 	size_t xlen, ylen, alen, blen, mlen;
 	uint32_t x0i, y0i;
+	int loop;
 
 	/*
 	 * Algorithm is an extended binary GCD. We maintain 6 values
@@ -2849,32 +3000,52 @@ zint_bezout(uint32_t *restrict u, uint32_t *restrict v,
 	 *  b = y   u1 = y   v1 = x-1
 	 * Note that x is odd, so computing x-1 is easy.
 	 */
-	memcpy(a, x, xlen * sizeof *x);
-	memcpy(b, y, ylen * sizeof *y);
+//	memcpy(a, x, xlen * sizeof *x);
+//	memcpy(b, y, ylen * sizeof *y);
+	for(loop=0;loop<xlen;loop++)
+		a[loop] = x[loop];
+	for(loop=0;loop<ylen;loop++)
+		b[loop] = y[loop];
 	alen = xlen;
 	blen = ylen;
 	u0[0] = 1;
-	memset(u0 + 1, 0, (ylen - 1) * sizeof *u0);
-	memset(v0, 0, xlen * sizeof *v0);
-	memcpy(u1, y, ylen * sizeof *u1);
-	memcpy(v1, x, xlen * sizeof *v1);
+//	memset(u0 + 1, 0, (ylen - 1) * sizeof *u0);
+//	memset(v0, 0, xlen * sizeof *v0);
+//	memcpy(u1, y, ylen * sizeof *u1);
+//	memcpy(v1, x, xlen * sizeof *v1);
+	for(loop=0;loop<ylen-1;loop++)
+		u0[loop+1] = 0;
+	for(loop=0;loop<xlen;loop++)
+		v0[loop] = 0;
+	for(loop=0;loop<ylen;loop++)
+		u1[loop] = y[loop];
+	for(loop=0;loop<xlen;loop++)
+		v1[loop] = x[loop];
+
 	v1[0] &= ~(uint32_t)1;
 
 	/*
 	 * We also zero out the upper unused words of the returned array
 	 * u and v (caller expects it).
 	 */
-	memset(u + ylen, 0, (len - ylen) * sizeof *u);
-	memset(v + xlen, 0, (len - xlen) * sizeof *v);
+//	memset(u + ylen, 0, (len - ylen) * sizeof *u);
+//	memset(v + xlen, 0, (len - xlen) * sizeof *v);
+	for(loop=0;loop<len - ylen;loop++)
+		u[ylen + loop] = 0;
+	for(loop=0;loop<len - xlen;loop++)
+		v[xlen + loop] = 0;
 
 	/*
 	 * We zero out the upper unused words of a and b as well, so that
 	 * we may subtract one from the other with a common length.
 	 */
 	mlen = alen < blen ? blen : alen;
-	memset(a + alen, 0, (mlen - alen) * sizeof *a);
-	memset(b + blen, 0, (mlen - blen) * sizeof *b);
-
+//	memset(a + alen, 0, (mlen - alen) * sizeof *a);
+//	memset(b + blen, 0, (mlen - blen) * sizeof *b);
+	for(loop=0;loop<mlen - alen;loop++)
+		a[alen + loop] = 0;
+	for(loop=0;loop<mlen - blen;loop++)
+		b[blen + loop] = 0;
 	/*
 	 * If x = 1 then the current values in u and v are just fine
 	 * and we can return them (because u0 and u are the same array,
@@ -2885,8 +3056,12 @@ zint_bezout(uint32_t *restrict u, uint32_t *restrict v,
 		return 1;
 	}
 	if (ylen == 1 && y[0] == 1) {
-		memcpy(u, u1, ylen * sizeof *u);
-		memcpy(v, v1, xlen * sizeof *v);
+//		memcpy(u, u1, ylen * sizeof *u);
+//		memcpy(v, v1, xlen * sizeof *v);
+		for(loop=0;loop<ylen;loop++)
+			u[loop] = u1[loop];
+		for(loop=0;loop<xlen;loop++)
+			v[loop] = v1[loop];
 		return 1;
 	}
 
@@ -3215,8 +3390,8 @@ zint_get_top(const uint32_t *x, size_t xlen, uint32_t sc)
  * negative values.
  */
 static void
-zint_add_scaled_mul_small(uint32_t *restrict x, size_t xlen,
-	const uint32_t *restrict y, size_t ylen, int32_t k,
+zint_add_scaled_mul_small(uint32_t * x, size_t xlen,
+	const uint32_t * y, size_t ylen, int32_t k,
 	uint32_t sch, uint32_t scl)
 {
 	size_t u;
@@ -3276,8 +3451,8 @@ zint_add_scaled_mul_small(uint32_t *restrict x, size_t xlen,
  * negative values.
  */
 static void
-zint_sub_scaled(uint32_t *restrict x, size_t xlen,
-	const uint32_t *restrict y, size_t ylen, uint32_t sch, uint32_t scl)
+zint_sub_scaled(uint32_t * x, size_t xlen,
+	const uint32_t * y, size_t ylen, uint32_t sch, uint32_t scl)
 {
 	size_t u;
 	uint32_t ysign, tw;
@@ -3401,9 +3576,9 @@ poly_big_to_small(int16_t *d, const uint32_t *s, unsigned logn, unsigned ter)
  * high degree.
  */
 static void
-poly_sub_scaled(uint32_t *restrict F, size_t Flen, size_t Fstride,
-	const uint32_t *restrict f, size_t flen, size_t fstride,
-	const int32_t *restrict k, uint32_t sc,
+poly_sub_scaled(uint32_t * F, size_t Flen, size_t Fstride,
+	const uint32_t * f, size_t flen, size_t fstride,
+	const int32_t * k, uint32_t sc,
 	unsigned logn, unsigned full, unsigned ternary)
 {
 	size_t n, hn, u;
@@ -3413,40 +3588,44 @@ poly_sub_scaled(uint32_t *restrict F, size_t Flen, size_t Fstride,
 	hn = n >> 1;
 	sch = sc / 31;
 	scl = sc % 31;
-	if (ternary) {
-		size_t off1, off2, off3;
-
-		off1 = hn * Fstride;
-		off2 = n * Fstride;
-		off3 = off1 + off2;
-		for (u = 0; u < n; u ++) {
-			int32_t kf;
-			size_t v, j;
-			const uint32_t *y;
-
-			kf = -k[u];
-			j = u * Fstride;
-			y = f;
-			for (v = 0; v < n; v ++, j += Fstride, y += fstride) {
-				if (u + v < n) {
-					zint_add_scaled_mul_small(
-						F + j, Flen,
-						y, flen, kf, sch, scl);
-				} else if (u + v < (n + hn)) {
-					zint_add_scaled_mul_small(
-						F + j - off1, Flen,
-						y, flen, kf, sch, scl);
-					zint_add_scaled_mul_small(
-						F + j - off2, Flen,
-						y, flen, -kf, sch, scl);
-				} else {
-					zint_add_scaled_mul_small(
-						F + j - off3, Flen,
-						y, flen, -kf, sch, scl);
-				}
-			}
-		}
-	} else {
+//	if (ternary) {
+//		size_t off1, off2, off3;
+//
+//		off1 = hn * Fstride;
+//		off2 = n * Fstride;
+//		off3 = off1 + off2;
+//		for (u = 0; u < n; u ++) {
+//			int32_t kf;
+//			size_t v, j;
+//			const uint32_t *y;
+//
+//			kf = -k[u];
+//			j = u * Fstride;
+//			y = f;
+//			for (v = 0; v < n; v ++, j += Fstride, y += fstride) {
+////#ifndef DEBUG
+//				if (u + v < n) {
+//					zint_add_scaled_mul_small(
+//						&F[j], Flen,
+//						y, flen, kf, sch, scl);
+//				} else if (u + v < (n + hn)) {
+////#endif
+//					zint_add_scaled_mul_small(
+//						&F[j - off1], Flen,
+//						y, flen, kf, sch, scl);
+//					zint_add_scaled_mul_small(
+//						&F[j - off2], Flen,
+//						y, flen, -kf, sch, scl);
+////#ifndef DEBUG
+//				} else {
+//					zint_add_scaled_mul_small(
+//						&F[j - off3], Flen,
+//						y, flen, -kf, sch, scl);
+//				}
+////#endif
+//			}
+//		}
+//	} else {
 		for (u = 0; u < n; u ++) {
 			int32_t kf;
 			size_t v;
@@ -3456,18 +3635,21 @@ poly_sub_scaled(uint32_t *restrict F, size_t Flen, size_t Fstride,
 			kf = -k[u];
 			x = F + u * Fstride;
 			y = f;
+#ifdef DEBUG
 			for (v = 0; v < n; v ++) {
 				zint_add_scaled_mul_small(
 					x, Flen, y, flen, kf, sch, scl);
+				x = F + (((u+v+1)%(n))*Fstride);
 				if (u + v == n - 1) {
-					x = F;
+//					x = F;
 					kf = -kf;
 				} else {
-					x += Fstride;
+//					x += Fstride;
 				}
 				y += fstride;
 			}
-		}
+#endif
+//		}
 	}
 }
 
@@ -3477,16 +3659,16 @@ poly_sub_scaled(uint32_t *restrict F, size_t Flen, size_t Fstride,
  * assumes that the degree is large, and integers relatively small.
  */
 static void
-poly_sub_scaled_ntt(uint32_t *restrict F, size_t Flen, size_t Fstride,
-	const uint32_t *restrict f, size_t flen, size_t fstride,
-	const int32_t *restrict k, uint32_t sc,
-	unsigned logn, unsigned full, int ternary, uint32_t *restrict tmp)
+poly_sub_scaled_ntt(uint32_t * F, size_t Flen, size_t Fstride,
+	const uint32_t * f, size_t flen, size_t fstride,
+	const int32_t * k, uint32_t sc,
+	unsigned logn, unsigned full, int ternary, uint32_t * tmp)
 {
 	uint32_t *gm, *igm, *fk, *t1, *x;
 	const uint32_t *y;
 	size_t n, u, tlen;
 	uint32_t sch, scl;
-	const small_prime *primes;
+//	const small_prime *primes;
 
 	n = MKN(logn, full);
 	tlen = flen + 1;
@@ -3495,7 +3677,7 @@ poly_sub_scaled_ntt(uint32_t *restrict F, size_t Flen, size_t Fstride,
 	fk = igm + MKN(logn, 0);
 	t1 = fk + n * tlen;
 
-	primes = ternary ? PRIMES3 : PRIMES2;
+//	primes = ternary ? PRIMES3 : PRIMES2;
 
 	/*
 	 * Compute k*f in fk[], in RNS notation.
@@ -3504,14 +3686,14 @@ poly_sub_scaled_ntt(uint32_t *restrict F, size_t Flen, size_t Fstride,
 		uint32_t p, p0i, R2, Rx;
 		size_t v;
 
-		p = primes[u].p;
+		p = PRIMES2[u].p;
 		p0i = modp_ninv31(p);
 		R2 = modp_R2(p, p0i);
 		Rx = modp_Rx(flen, p, p0i, R2);
 		if (ternary) {
-			modp_mkgm3(gm, igm, logn, full, primes[u].g, p, p0i);
+			modp_mkgm3(gm, igm, logn, full, PRIMES2[u].g, p, p0i);
 		} else {
-			modp_mkgm2(gm, igm, logn, primes[u].g, p, p0i);
+			modp_mkgm2(gm, igm, logn, PRIMES2[u].g, p, p0i);
 		}
 
 		for (v = 0; v < n; v ++) {
@@ -3546,7 +3728,7 @@ poly_sub_scaled_ntt(uint32_t *restrict F, size_t Flen, size_t Fstride,
 	/*
 	 * Rebuild k*f.
 	 */
-	zint_rebuild_CRT(fk, tlen, tlen, n, primes, 1, t1);
+	zint_rebuild_CRT(fk, tlen, tlen, n, 1, t1);
 
 	/*
 	 * Subtract k*f, scaled, from F.
@@ -3559,27 +3741,27 @@ poly_sub_scaled_ntt(uint32_t *restrict F, size_t Flen, size_t Fstride,
 }
 
 /* ==================================================================== */
-
-struct falcon_keygen_ {
-
-	/* Base-2 logarithm of the degree. */
-	unsigned logn;
-
-	/* 1 for a ternary modulus, 0 for binary. */
-	unsigned ternary;
-
-	/* RNG:
-	   seeded    non-zero when a 'replace' seed or system RNG was pushed
-	   flipped   non-zero when flipped */
-	shake_context rng;
-	int seeded;
-	int flipped;
-
-	/* Temporary storage for key generation. 'tmp_len' is expressed
-	   in 32-bit words. */
-	uint32_t *tmp;
-	size_t tmp_len;
-};
+//
+//struct falcon_keygen_ {
+//
+//	/* Base-2 logarithm of the degree. */
+//	unsigned logn;
+//
+//	/* 1 for a ternary modulus, 0 for binary. */
+//	unsigned ternary;
+//
+//	/* RNG:
+//	   seeded    non-zero when a 'replace' seed or system RNG was pushed
+//	   flipped   non-zero when flipped */
+//	shake_context rng;
+//	int seeded;
+//	int flipped;
+//
+//	/* Temporary storage for key generation. 'tmp_len' is expressed
+//	   in 32-bit words. */
+//	uint32_t *tmp;
+//	size_t tmp_len;
+//};
 
 /*
  * Get a random 8-byte integer from a SHAKE-based RNG. This function
@@ -3599,10 +3781,25 @@ get_rng_u64(shake_context *rng)
 	 * On other systems we enforce little-endian representation.
 	 */
 #if FALCON_LE_U
+#ifndef DEBUG1
+	unsigned char tmp[8];
+
+	shake_extract(rng, tmp, sizeof tmp);
+	return (uint64_t)tmp[0]
+		| ((uint64_t)tmp[1] << 8)
+		| ((uint64_t)tmp[2] << 16)
+		| ((uint64_t)tmp[3] << 24)
+		| ((uint64_t)tmp[4] << 32)
+		| ((uint64_t)tmp[5] << 40)
+		| ((uint64_t)tmp[6] << 48)
+		| ((uint64_t)tmp[7] << 56);
+#else
+
 	uint64_t r;
 
-	shake_extract(rng, &r, sizeof r);
+	shake_extract(rng, &r, sizeof r); //Hex:0x84ac8b2051eb9013, 0xc59f66c6b242dc11
 	return r;
+#endif
 #else
 	unsigned char tmp[8];
 
@@ -3768,7 +3965,7 @@ static const size_t MAX_BL_LARGE3[] = {
  * Compute size of temporary array for key generation.
  * Returned size is expressed in bytes.
  */
-static size_t
+size_t
 temp_size(unsigned logn, int ternary)
 {
 #define ALIGN_FP(tt)   ((((tt) + sizeof(fpr) - 1) / sizeof(fpr)) * sizeof(fpr))
@@ -3939,47 +4136,47 @@ static const char MEMCHECK_MARK[] = "memcheck";
 #endif
 
 /* see falcon.h */
-falcon_keygen *
-falcon_keygen_new(unsigned logn, int ternary)
-{
-	falcon_keygen *fk;
-
-	if (ternary) {
-		if (logn < 3 || logn > 9) {
-			return NULL;
-		}
-	} else {
-		if (logn < 1 || logn > 10) {
-			return NULL;
-		}
-	}
-	fk = malloc(sizeof *fk);
-	if (fk == NULL) {
-		return NULL;
-	}
-	fk->logn = logn;
-	fk->ternary = ternary;
-	shake_init(&fk->rng, 512);
-	fk->seeded = 0;
-	fk->flipped = 0;
-
-	fk->tmp_len = temp_size(logn, ternary);
-#if MEMCHECK
-	fk->tmp = malloc(fk->tmp_len + sizeof MEMCHECK_MARK);
-#else
-	fk->tmp = malloc(fk->tmp_len);
-#endif
-	if (fk->tmp == NULL) {
-		free(fk);
-		return NULL;
-	}
-#if MEMCHECK
-	memcpy((unsigned char *)fk->tmp + fk->tmp_len,
-		MEMCHECK_MARK, sizeof MEMCHECK_MARK);
-#endif
-
-	return fk;
-}
+//falcon_keygen *
+//falcon_keygen_new(falcon_keygen *fk, unsigned logn, int ternary)
+//{
+//	//falcon_keygen *fk;
+//
+//	if (ternary) {
+//		if (logn < 3 || logn > 9) {
+//			return NULL;
+//		}
+//	} else {
+//		if (logn < 1 || logn > 10) {
+//			return NULL;
+//		}
+//	}
+//	fk = malloc(sizeof *fk);
+//	if (fk == NULL) {
+//		return NULL;
+//	}
+//	fk->logn = logn;
+//	fk->ternary = ternary;
+//	shake_init(&fk->rng, 512);
+//	fk->seeded = 0;
+//	fk->flipped = 0;
+//
+//	fk->tmp_len = temp_size(logn, ternary);
+//#if MEMCHECK
+//	fk->tmp = malloc(fk->tmp_len + sizeof MEMCHECK_MARK);
+//#else
+//	fk->tmp = malloc(fk->tmp_len);
+//#endif
+//	if (fk->tmp == NULL) {
+//		free(fk);
+//		return NULL;
+//	}
+//#if MEMCHECK
+//	memcpy((unsigned char *)fk->tmp + fk->tmp_len,
+//		MEMCHECK_MARK, sizeof MEMCHECK_MARK);
+//#endif
+//
+//	return fk;
+//}
 
 /* see falcon.h */
 void
@@ -4165,26 +4362,27 @@ poly_small_to_fp(fpr *x, const int16_t *f, unsigned logn, unsigned ter)
  *
  * Values are in RNS; input and/or output may also be in NTT.
  */
-static void
-make_fg_step(uint32_t *data, unsigned logn, unsigned depth, unsigned ter,
+void
+make_fg_step(uint32_t data[3584+3-106*2], unsigned logn, unsigned depth, unsigned ter,
 	int in_ntt, int out_ntt)
 {
 	size_t n, hn, u;
 	size_t slen, tlen;
 	uint32_t *fd, *gd, *fs, *gs, *gm, *igm, *t1;
-	const small_prime *primes;
+//	const small_prime *primes;
+	int loop;
 
 	n = (size_t)1 << logn;
 	hn = n >> 1;
-	if (ter) {
-		slen = MAX_BL_SMALL3[depth];
-		tlen = MAX_BL_SMALL3[depth + 1];
-		primes = PRIMES3;
-	} else {
+//	if (ter) {
+//		slen = MAX_BL_SMALL3[depth];
+//		tlen = MAX_BL_SMALL3[depth + 1];
+////		primes = PRIMES3;
+//	} else {
 		slen = MAX_BL_SMALL2[depth];
 		tlen = MAX_BL_SMALL2[depth + 1];
-		primes = PRIMES2;
-	}
+//		primes = PRIMES2;
+//	}
 
 	/*
 	 * Prepare room for the result.
@@ -4196,7 +4394,9 @@ make_fg_step(uint32_t *data, unsigned logn, unsigned depth, unsigned ter,
 	gm = gs + n * slen;
 	igm = gm + n;
 	t1 = igm + n;
-	memmove(fs, data, 2 * n * slen * sizeof *data);
+//	memmove(fs, data, 2 * n * slen * sizeof *data);
+	for(loop=2*n*slen-1;loop>=0;loop--)
+		fs[loop] = data[loop];
 
 	/*
 	 * First slen words: we use the input values directly, and apply
@@ -4207,24 +4407,25 @@ make_fg_step(uint32_t *data, unsigned logn, unsigned depth, unsigned ter,
 		size_t v;
 		uint32_t *x;
 
-		p = primes[u].p;
+		p = PRIMES2[u].p;
 		p0i = modp_ninv31(p);
 		R2 = modp_R2(p, p0i);
-		if (ter) {
-			modp_mkgm3(gm, igm, logn, 0, primes[u].g, p, p0i);
-		} else {
-			modp_mkgm2(gm, igm, logn, primes[u].g, p, p0i);
-		}
+//		if (ter) {
+//			modp_mkgm3(gm, igm, logn, 0, PRIMES2[u].g, p, p0i);
+//		} else {
+			modp_mkgm2(gm, igm, logn, PRIMES2[u].g, p, p0i);
+//		}
+#ifdef DEBUG
 
 		for (v = 0, x = fs + u; v < n; v ++, x += slen) {
 			t1[v] = *x;
 		}
 		if (!in_ntt) {
-			if (ter) {
-				modp_NTT3(t1, gm, logn, 0, p, p0i);
-			} else {
+//			if (ter) {
+//				modp_NTT3(t1, gm, logn, 0, p, p0i);
+//			} else {
 				modp_NTT2(t1, gm, logn, p, p0i);
-			}
+//			}
 		}
 		for (v = 0, x = fd + u; v < hn; v ++, x += tlen) {
 			uint32_t w0, w1;
@@ -4235,24 +4436,23 @@ make_fg_step(uint32_t *data, unsigned logn, unsigned depth, unsigned ter,
 				modp_montymul(w0, w1, p, p0i), R2, p, p0i);
 		}
 		if (in_ntt) {
-			if (ter) {
-				modp_iNTT3_ext(fs + u, slen, igm,
-					logn, 0, p, p0i);
-			} else {
+//			if (ter) {
+//				modp_iNTT3_ext(fs + u, slen, igm,
+//					logn, 0, p, p0i);
+//			} else {
 				modp_iNTT2_ext(fs + u, slen, igm,
 					logn, p, p0i);
-			}
+//			}
 		}
-
 		for (v = 0, x = gs + u; v < n; v ++, x += slen) {
 			t1[v] = *x;
 		}
 		if (!in_ntt) {
-			if (ter) {
-				modp_NTT3(t1, gm, logn, 0, p, p0i);
-			} else {
+//			if (ter) {
+//				modp_NTT3(t1, gm, logn, 0, p, p0i);
+//			} else {
 				modp_NTT2(t1, gm, logn, p, p0i);
-			}
+//			}
 		}
 		for (v = 0, x = gd + u; v < hn; v ++, x += tlen) {
 			uint32_t w0, w1;
@@ -4263,36 +4463,38 @@ make_fg_step(uint32_t *data, unsigned logn, unsigned depth, unsigned ter,
 				modp_montymul(w0, w1, p, p0i), R2, p, p0i);
 		}
 		if (in_ntt) {
-			if (ter) {
-				modp_iNTT3_ext(gs + u, slen, igm,
-					logn, 0, p, p0i);
-			} else {
+//			if (ter) {
+//				modp_iNTT3_ext(gs + u, slen, igm,
+//					logn, 0, p, p0i);
+//			} else {
 				modp_iNTT2_ext(gs + u, slen, igm,
 					logn, p, p0i);
-			}
+//			}
 		}
 
 		if (!out_ntt) {
-			if (ter) {
-				modp_iNTT3_ext(fd + u, tlen, igm,
-					logn - 1, 0, p, p0i);
-				modp_iNTT3_ext(gd + u, tlen, igm,
-					logn - 1, 0, p, p0i);
-			} else {
+//			if (ter) {
+//				modp_iNTT3_ext(fd + u, tlen, igm,
+//					logn - 1, 0, p, p0i);
+//				modp_iNTT3_ext(gd + u, tlen, igm,
+//					logn - 1, 0, p, p0i);
+//			} else {
 				modp_iNTT2_ext(fd + u, tlen, igm,
 					logn - 1, p, p0i);
 				modp_iNTT2_ext(gd + u, tlen, igm,
 					logn - 1, p, p0i);
-			}
+//			}
 		}
+#endif
 	}
 
 	/*
 	 * Since the fs and gs words have been de-NTTized, we can use the
 	 * CRT to rebuild the values.
 	 */
-	zint_rebuild_CRT(fs, slen, slen, n, primes, 1, gm);
-	zint_rebuild_CRT(gs, slen, slen, n, primes, 1, gm);
+#ifdef DEBUG
+	zint_rebuild_CRT(fs, slen, slen, n, 1, gm);
+	zint_rebuild_CRT(gs, slen, slen, n, 1, gm);
 
 	/*
 	 * Remaining words: use modular reductions to extract the values.
@@ -4302,23 +4504,23 @@ make_fg_step(uint32_t *data, unsigned logn, unsigned depth, unsigned ter,
 		size_t v;
 		uint32_t *x;
 
-		p = primes[u].p;
+		p = PRIMES2[u].p;
 		p0i = modp_ninv31(p);
 		R2 = modp_R2(p, p0i);
 		Rx = modp_Rx(slen, p, p0i, R2);
-		if (ter) {
-			modp_mkgm3(gm, igm, logn, 0, primes[u].g, p, p0i);
-		} else {
-			modp_mkgm2(gm, igm, logn, primes[u].g, p, p0i);
-		}
+//		if (ter) {
+//			modp_mkgm3(gm, igm, logn, 0, PRIMES2[u].g, p, p0i);
+//		} else {
+			modp_mkgm2(gm, igm, logn, PRIMES2[u].g, p, p0i);
+//		}
 		for (v = 0, x = fs; v < n; v ++, x += slen) {
 			t1[v] = zint_mod_small_signed(x, slen, p, p0i, R2, Rx);
 		}
-		if (ter) {
-			modp_NTT3(t1, gm, logn, 0, p, p0i);
-		} else {
+//		if (ter) {
+//			modp_NTT3(t1, gm, logn, 0, p, p0i);
+//		} else {
 			modp_NTT2(t1, gm, logn, p, p0i);
-		}
+//		}
 		for (v = 0, x = fd + u; v < hn; v ++, x += tlen) {
 			uint32_t w0, w1;
 
@@ -4330,11 +4532,11 @@ make_fg_step(uint32_t *data, unsigned logn, unsigned depth, unsigned ter,
 		for (v = 0, x = gs; v < n; v ++, x += slen) {
 			t1[v] = zint_mod_small_signed(x, slen, p, p0i, R2, Rx);
 		}
-		if (ter) {
-			modp_NTT3(t1, gm, logn, 0, p, p0i);
-		} else {
+//		if (ter) {
+//			modp_NTT3(t1, gm, logn, 0, p, p0i);
+//		} else {
 			modp_NTT2(t1, gm, logn, p, p0i);
-		}
+//		}
 		for (v = 0, x = gd + u; v < hn; v ++, x += tlen) {
 			uint32_t w0, w1;
 
@@ -4345,19 +4547,20 @@ make_fg_step(uint32_t *data, unsigned logn, unsigned depth, unsigned ter,
 		}
 
 		if (!out_ntt) {
-			if (ter) {
-				modp_iNTT3_ext(fd + u, tlen, igm,
-					logn - 1, 0, p, p0i);
-				modp_iNTT3_ext(gd + u, tlen, igm,
-					logn - 1, 0, p, p0i);
-			} else {
+//			if (ter) {
+//				modp_iNTT3_ext(fd + u, tlen, igm,
+//					logn - 1, 0, p, p0i);
+//				modp_iNTT3_ext(gd + u, tlen, igm,
+//					logn - 1, 0, p, p0i);
+//			} else {
 				modp_iNTT2_ext(fd + u, tlen, igm,
 					logn - 1, p, p0i);
 				modp_iNTT2_ext(gd + u, tlen, igm,
 					logn - 1, p, p0i);
-			}
+//			}
 		}
 	}
+#endif
 }
 
 /*
@@ -4423,6 +4626,7 @@ make_fg_ternary_top(uint32_t *data, unsigned logn, int out_ntt)
 	size_t n, dn, tn, u, v;
 	uint32_t *gm, *igm, *fd, *gd, *fs, *gs;
 	uint32_t p, p0i, R2, R3;
+	int loop;
 
 	n = MKN(logn, 1);
 	dn = MKN(logn, 0);
@@ -4433,7 +4637,9 @@ make_fg_ternary_top(uint32_t *data, unsigned logn, int out_ntt)
 	gs = fs + n;
 	gm = gs + n;
 	igm = gm + dn;
-	memmove(fs, data, n * 2 * sizeof *data);
+//	memmove(fs, data, n * 2 * sizeof *data);
+	for(loop=0;loop<2*n;loop++)
+		fs[loop] = data[loop];
 
 	p = PRIMES3[0].p;
 	p0i = modp_ninv31(p);
@@ -4470,57 +4676,59 @@ make_fg_ternary_top(uint32_t *data, unsigned logn, int out_ntt)
  * Space use in data[]: enough room for any two successive values (f', g',
  * f and g).
  */
-static void
-make_fg(uint32_t *data, const int16_t *f, const int16_t *g,
+void
+make_fg(uint32_t data[3584+3-106*2], const int16_t f[1024], const int16_t g[1024],
 	unsigned logn, unsigned ter, unsigned depth, int out_ntt)
 {
 	size_t n, u;
 	uint32_t *ft, *gt, p0;
 	unsigned d;
-	const small_prime *primes;
+//	const small_prime *primes;
 
-	n = MKN(logn, ter);
+	n = 1 << logn;//MKN(logn, 0);
 	ft = data;
-	gt = ft + n;
-	primes = ter ? PRIMES3 : PRIMES2;
-	p0 = primes[0].p;
+	gt = &ft[n];
+//	primes = ter ? PRIMES3 : PRIMES2;
+	p0 = PRIMES2[0].p;
 	for (u = 0; u < n; u ++) {
 		ft[u] = modp_set(f[u], p0);
-		gt[u] = modp_set(g[u], p0);
+		ft[n+u] = modp_set(g[u], p0);
 	}
 
 	if (depth == 0 && out_ntt) {
 		uint32_t *gm, *igm;
 		uint32_t p, p0i;
 
-		p = primes[0].p;
+		p = PRIMES2[0].p;
 		p0i = modp_ninv31(p);
 		gm = gt + n;
 		igm = gm + MKN(logn, 0);
-		if (ter) {
-			modp_mkgm3(gm, igm, logn, 1, primes[0].g, p, p0i);
-			modp_NTT3(ft, gm, logn, 1, p, p0i);
-			modp_NTT3(gt, gm, logn, 1, p, p0i);
-		} else {
-			modp_mkgm2(gm, igm, logn, primes[0].g, p, p0i);
+//		if (ter) {
+//			modp_mkgm3(gm, igm, logn, 1, PRIMES2[0].g, p, p0i);
+//			modp_NTT3(ft, gm, logn, 1, p, p0i);
+//			modp_NTT3(gt, gm, logn, 1, p, p0i);
+//		} else {
+			modp_mkgm2(gm, igm, logn, PRIMES2[0].g, p, p0i);
 			modp_NTT2(ft, gm, logn, p, p0i);
 			modp_NTT2(gt, gm, logn, p, p0i);
-		}
+//		}
 		return;
 	}
+#ifdef DEBUG
 
-	if (ter) {
-		make_fg_ternary_top(data, logn, depth > 1 || out_ntt);
-		for (d = 1; d < depth; d ++) {
-			make_fg_step(data, logn - d, d, 1,
-				1, (d + 1) < depth || out_ntt);
-		}
-	} else {
+//	if (ter) {
+//		make_fg_ternary_top(data, logn, depth > 1 || out_ntt);
+//		for (d = 1; d < depth; d ++) {
+//			make_fg_step(data, logn - d, d, 1,
+//				1, (d + 1) < depth || out_ntt);
+//		}
+//	} else {
 		for (d = 0; d < depth; d ++) {
 			make_fg_step(data, logn - d, d, 0,
 				d != 0, (d + 1) < depth || out_ntt);
 		}
-	}
+//	}
+#endif
 }
 
 /*
@@ -4530,22 +4738,22 @@ make_fg(uint32_t *data, const int16_t *f, const int16_t *g,
  *
  * Returned value: 1 on success, 0 on error.
  */
-static int
-solve_NTRU_deepest(falcon_keygen *fk, const int16_t *f, const int16_t *g)
+int
+solve_NTRU_deepest(falcon_keygen *fk, const int16_t f[1024], const int16_t g[1024])
 {
 	unsigned logn;
 	size_t len;
 	uint32_t *Fp, *Gp, *fp, *gp, *t1, q;
-	const small_prime *primes;
+//	const small_prime *primes;
 
 	logn = fk->logn;
-	if (fk->ternary) {
-		len = MAX_BL_SMALL3[logn];
-		primes = PRIMES3;
-	} else {
+//	if (fk->ternary) {
+//		len = MAX_BL_SMALL3[logn];
+////		primes = PRIMES3;
+//	} else {
 		len = MAX_BL_SMALL2[logn];
-		primes = PRIMES2;
-	}
+//		primes = PRIMES2;
+//	}
 
 	Fp = fk->tmp;
 	Gp = Fp + len;
@@ -4553,13 +4761,14 @@ solve_NTRU_deepest(falcon_keygen *fk, const int16_t *f, const int16_t *g)
 	gp = fp + len;
 	t1 = gp + len;
 
-	make_fg(fp, f, g, logn, fk->ternary, logn, 0);
+	//	make_fg(fp, f, g, logn, fk->ternary, logn, 0);
+		make_fg(fp, f, g, logn, 0, logn, 0);
 
 	/*
 	 * We use the CRT to rebuild the resultants as big integers.
 	 * There are two such big integers.
 	 */
-	zint_rebuild_CRT(fp, len, len, 2, primes, 0, t1);
+	zint_rebuild_CRT(fp, len, len, 2, 0, t1);
 
 	/*
 	 * Apply the binary GCD. The zint_bezout() function works only
@@ -4573,9 +4782,11 @@ solve_NTRU_deepest(falcon_keygen *fk, const int16_t *f, const int16_t *g)
 	 * Multiply the two values by the target value q. Values must
 	 * fit in the destination arrays.
 	 */
-	q = fk->ternary ? 18433 : 12289;
-	if (zint_mul_small(Fp, len, q) != 0
-		|| zint_mul_small(Gp, len, q) != 0)
+//	q = fk->ternary ? 18433 : 12289;
+//	if (zint_mul_small(Fp, len, q) != 0
+//		|| zint_mul_small(Gp, len, q) != 0)
+	if (zint_mul_small(Fp, len, 12289) != 0
+		|| zint_mul_small(Gp, len, 12289) != 0)
 	{
 		return 0;
 	}
@@ -4590,9 +4801,9 @@ solve_NTRU_deepest(falcon_keygen *fk, const int16_t *f, const int16_t *g)
  *
  * Returned value: 1 on success, 0 on error.
  */
-static int
+int
 solve_NTRU_intermediate(falcon_keygen *fk,
-	const int16_t *f, const int16_t *g, unsigned depth)
+	const int16_t f[1024], const int16_t g[1024], unsigned depth)
 {
 	/*
 	 * In this function, 'logn' is the log2 of the degree for
@@ -4608,7 +4819,8 @@ solve_NTRU_intermediate(falcon_keygen *fk,
 	uint32_t maxbl_f, maxbl_g, maxbl_fg, maxbl_FG, prev_maxbl_FG;
 	uint32_t *x, *y;
 	int32_t *k;
-	const small_prime *primes;
+//	const small_prime *primes;
+	int loop;
 
 	logn_top = fk->logn;
 	logn = logn_top - depth;
@@ -4617,15 +4829,15 @@ solve_NTRU_intermediate(falcon_keygen *fk,
 	 * In the ternary case _and_ top-level, n is a multiple of 3,
 	 * and hn = n/3. Otherwise, n is a power of 2, and hn = n/2.
 	 */
-	if (fk->ternary && depth == 0) {
-		full = 1;
-		n = (size_t)3 << (logn - 1);
-		hn = (size_t)1 << (logn - 1);
-	} else {
+//	if (fk->ternary && depth == 0) {
+//		full = 1;
+//		n = (size_t)3 << (logn - 1);
+//		hn = (size_t)1 << (logn - 1);
+//	} else {
 		full = 0;
 		n = (size_t)1 << logn;
 		hn = n >> 1;
-	}
+//	}
 
 	/*
 	 * slen = size for our input f and g; also size of the reduced
@@ -4639,17 +4851,17 @@ solve_NTRU_intermediate(falcon_keygen *fk,
 	 * We build our non-reduced F and G as two independent halves each,
 	 * of degree N/2 (F = F0 + X*F1, G = G0 + X*G1).
 	 */
-	if (fk->ternary) {
-		slen = MAX_BL_SMALL3[depth];
-		dlen = MAX_BL_SMALL3[depth + 1];
-		llen = MAX_BL_LARGE3[depth];
-		primes = PRIMES3;
-	} else {
+//	if (fk->ternary) {
+//		slen = MAX_BL_SMALL3[depth];
+//		dlen = MAX_BL_SMALL3[depth + 1];
+//		llen = MAX_BL_LARGE3[depth];
+////		primes = PRIMES3;
+//	} else {
 		slen = MAX_BL_SMALL2[depth];
 		dlen = MAX_BL_SMALL2[depth + 1];
 		llen = MAX_BL_LARGE2[depth];
-		primes = PRIMES2;
-	}
+//		primes = PRIMES2;
+//	}
 
 	/*
 	 * Fd and Gd are the F and G from the deeper level.
@@ -4662,7 +4874,8 @@ solve_NTRU_intermediate(falcon_keygen *fk,
 	 * and g in RNS + NTT representation.
 	 */
 	ft = Gd + dlen * hn;
-	make_fg(ft, f, g, logn_top, fk->ternary, depth, 1);
+	make_fg(ft, f, g, logn_top, 0, depth, 1);
+#ifdef DEBUG
 
 	/*
 	 * Move the newly computed f and g to make room for our candidate
@@ -4671,7 +4884,9 @@ solve_NTRU_intermediate(falcon_keygen *fk,
 	Ft = fk->tmp;
 	Gt = Ft + n * llen;
 	t1 = Gt + n * llen;
-	memmove(t1, ft, 2 * n * slen * sizeof *ft);
+	//memmove(t1, ft, 2 * n * slen * sizeof *ft);
+	for(loop=0;loop<2*n*slen;loop++)
+		t1[loop] = ft[loop];
 	ft = t1;
 	gt = ft + slen * n;
 	t1 = gt + slen * n;
@@ -4679,7 +4894,9 @@ solve_NTRU_intermediate(falcon_keygen *fk,
 	/*
 	 * Move Fd and Gd _after_ f and g.
 	 */
-	memmove(t1, Fd, 2 * hn * dlen * sizeof *Fd);
+//	memmove(t1, Fd, 2 * hn * dlen * sizeof *Fd);
+	for(loop=0;loop<2*hn*dlen;loop++)
+		t1[loop] = Fd[loop];
 	Fd = t1;
 	Gd = Fd + hn * dlen;
 
@@ -4692,7 +4909,7 @@ solve_NTRU_intermediate(falcon_keygen *fk,
 		size_t v;
 		uint32_t *xs, *ys, *xd, *yd;
 
-		p = primes[u].p;
+		p = PRIMES2[u].p;
 		p0i = modp_ninv31(p);
 		R2 = modp_R2(p, p0i);
 		Rx = modp_Rx(dlen, p, p0i, R2);
@@ -4710,7 +4927,7 @@ solve_NTRU_intermediate(falcon_keygen *fk,
 	 */
 
 	/*
-	 * Compute our F and G modulo sufficiently many small primes.
+	 * Compute our F and G modulo sufficiently many small PRIMES2.
 	 */
 	for (u = 0; u < llen; u ++) {
 		uint32_t p, p0i, R2;
@@ -4720,7 +4937,7 @@ solve_NTRU_intermediate(falcon_keygen *fk,
 		/*
 		 * All computations are done modulo p.
 		 */
-		p = primes[u].p;
+		p = PRIMES2[u].p;
 		p0i = modp_ninv31(p);
 		R2 = modp_R2(p, p0i);
 
@@ -4729,8 +4946,10 @@ solve_NTRU_intermediate(falcon_keygen *fk,
 		 * de-NTTized, and are in RNS; we can rebuild them.
 		 */
 		if (u == slen) {
-			zint_rebuild_CRT(ft, slen, slen, n, primes, 1, t1);
-			zint_rebuild_CRT(gt, slen, slen, n, primes, 1, t1);
+//#ifndef DEBUG
+			zint_rebuild_CRT(ft, slen, slen, n, 1, t1);
+			zint_rebuild_CRT(gt, slen, slen, n, 1, t1);
+//#endif
 		}
 
 		gm = t1;
@@ -4744,11 +4963,11 @@ solve_NTRU_intermediate(falcon_keygen *fk,
 		}
 		gx = fx + n;
 
-		if (fk->ternary) {
-			modp_mkgm3(gm, igm, logn, full, primes[u].g, p, p0i);
-		} else {
-			modp_mkgm2(gm, igm, logn, primes[u].g, p, p0i);
-		}
+//		if (fk->ternary) {
+//			modp_mkgm3(gm, igm, logn, full, PRIMES2[u].g, p, p0i);
+//		} else {
+			modp_mkgm2(gm, igm, logn, PRIMES2[u].g, p, p0i);
+//		}
 
 		if (u < slen) {
 			size_t v;
@@ -4759,17 +4978,17 @@ solve_NTRU_intermediate(falcon_keygen *fk,
 				fx[v] = *x;
 				gx[v] = *y;
 			}
-			if (fk->ternary) {
-				modp_iNTT3_ext(ft + u, slen, igm,
-					logn, full, p, p0i);
-				modp_iNTT3_ext(gt + u, slen, igm,
-					logn, full, p, p0i);
-			} else {
+//			if (fk->ternary) {
+//				modp_iNTT3_ext(ft + u, slen, igm,
+//					logn, full, p, p0i);
+//				modp_iNTT3_ext(gt + u, slen, igm,
+//					logn, full, p, p0i);
+//			} else {
 				modp_iNTT2_ext(ft + u, slen, igm,
 					logn, p, p0i);
 				modp_iNTT2_ext(gt + u, slen, igm,
 					logn, p, p0i);
-			}
+//			}
 		} else {
 			uint32_t Rx;
 			size_t v;
@@ -4783,13 +5002,13 @@ solve_NTRU_intermediate(falcon_keygen *fk,
 				gx[v] = zint_mod_small_signed(y, slen,
 					p, p0i, R2, Rx);
 			}
-			if (fk->ternary) {
-				modp_NTT3(fx, gm, logn, full, p, p0i);
-				modp_NTT3(gx, gm, logn, full, p, p0i);
-			} else {
+//			if (fk->ternary) {
+//				modp_NTT3(fx, gm, logn, full, p, p0i);
+//				modp_NTT3(gx, gm, logn, full, p, p0i);
+//			} else {
 				modp_NTT2(fx, gm, logn, p, p0i);
 				modp_NTT2(gx, gm, logn, p, p0i);
-			}
+//			}
 		}
 
 		/*
@@ -4805,13 +5024,13 @@ solve_NTRU_intermediate(falcon_keygen *fk,
 			Fp[v] = *x;
 			Gp[v] = *y;
 		}
-		if (fk->ternary) {
-			modp_NTT3(Fp, gm, logn - 1, 0, p, p0i);
-			modp_NTT3(Gp, gm, logn - 1, 0, p, p0i);
-		} else {
+//		if (fk->ternary) {
+//			modp_NTT3(Fp, gm, logn - 1, 0, p, p0i);
+//			modp_NTT3(Gp, gm, logn - 1, 0, p, p0i);
+//		} else {
 			modp_NTT2(Fp, gm, logn - 1, p, p0i);
 			modp_NTT2(Gp, gm, logn - 1, p, p0i);
-		}
+//		}
 
 		/*
 		 * Compute our F and G modulo p.
@@ -4900,20 +5119,22 @@ solve_NTRU_intermediate(falcon_keygen *fk,
 				y[llen] = modp_montymul(ftA, mGp, p, p0i);
 			}
 		}
-		if (fk->ternary) {
-			modp_iNTT3_ext(Ft + u, llen, igm, logn, full, p, p0i);
-			modp_iNTT3_ext(Gt + u, llen, igm, logn, full, p, p0i);
-		} else {
+//		if (fk->ternary) {
+//			modp_iNTT3_ext(Ft + u, llen, igm, logn, full, p, p0i);
+//			modp_iNTT3_ext(Gt + u, llen, igm, logn, full, p, p0i);
+//		} else {
 			modp_iNTT2_ext(Ft + u, llen, igm, logn, p, p0i);
 			modp_iNTT2_ext(Gt + u, llen, igm, logn, p, p0i);
-		}
+//		}
 	}
 
 	/*
 	 * Rebuild F and G with the CRT.
 	 */
-	zint_rebuild_CRT(Ft, llen, llen, n, primes, 1, t1);
-	zint_rebuild_CRT(Gt, llen, llen, n, primes, 1, t1);
+//#ifndef DEBUG
+	zint_rebuild_CRT(Ft, llen, llen, n, 1, t1);
+	zint_rebuild_CRT(Gt, llen, llen, n, 1, t1);
+//#endif
 
 	/*
 	 * At that point, Ft, Gt, ft and gt are consecutive in RAM (in that
@@ -4964,17 +5185,23 @@ solve_NTRU_intermediate(falcon_keygen *fk,
 	 * source array fk->tmp was obtained with malloc(), and is thus
 	 * already aligned).
 	 */
-
-	rt3 = align_fpr(fk->tmp, t1);
+//	rt3 = align_fpr(fk->tmp, t1);
+	rt3 = (fpr *)t1;
 	rt4 = rt3 + n;
 	rt5 = rt4 + n;
 	rt1 = rt5 + (n >> 1);
+#ifndef DEBUG
 	k = (int32_t *)align_u32(fk->tmp, rt1);
 	rt2 = align_fpr(fk->tmp, k + n);
 	if (rt2 < (rt1 + n)) {
 		rt2 = rt1 + n;
 	}
 	t1 = (uint32_t *)k + n;
+#else
+	k = rt1;//(int32_t *)align_u32(fk->tmp, rt1);
+	rt2 = rt1 + n;
+	t1 = (uint32_t *)k + n;
+#endif
 
 	/*
 	 * Get the maximum bit lengths of f and g. f and g are scaled
@@ -4983,33 +5210,34 @@ solve_NTRU_intermediate(falcon_keygen *fk,
 	maxbl_f = poly_max_bitlength(ft, slen, slen, logn, full);
 	maxbl_g = poly_max_bitlength(gt, slen, slen, logn, full);
 	maxbl_fg = maxbl_f < maxbl_g ? maxbl_g : maxbl_f;
-
-	/*
-	 * Compute 1/(f*adj(f)+g*adj(g)) in rt5. We also keep adj(f)
-	 * and adj(g) in rt3 and rt4, respectively.
-	 */
+//
+//	/*
+//	 * Compute 1/(f*adj(f)+g*adj(g)) in rt5. We also keep adj(f)
+//	 * and adj(g) in rt3 and rt4, respectively.
+//	 */
 	poly_big_to_fp(rt3, ft, slen, slen, logn, full, maxbl_fg, maxbl_fg);
 	poly_big_to_fp(rt4, gt, slen, slen, logn, full, maxbl_fg, maxbl_fg);
 
-	if (fk->ternary) {
-		falcon_FFT3(rt3, logn, full);
-		falcon_FFT3(rt4, logn, full);
-		falcon_poly_invnorm2_fft3(rt5, rt3, rt4, logn, full);
-		falcon_poly_adj_fft3(rt3, logn, full);
-		falcon_poly_adj_fft3(rt4, logn, full);
-	} else {
+//	if (fk->ternary) {
+//		falcon_FFT3(rt3, logn, full);
+//		falcon_FFT3(rt4, logn, full);
+//		falcon_poly_invnorm2_fft3(rt5, rt3, rt4, logn, full);
+//		falcon_poly_adj_fft3(rt3, logn, full);
+//		falcon_poly_adj_fft3(rt4, logn, full);
+//	} else {
 		falcon_FFT(rt3, logn);
 		falcon_FFT(rt4, logn);
 		falcon_poly_invnorm2_fft(rt5, rt3, rt4, logn);
 		falcon_poly_adj_fft(rt3, logn);
 		falcon_poly_adj_fft(rt4, logn);
-	}
-
-	/*
-	 * Reduce F and G repeatedly while the processing works.
-	 */
+//	}
+//
+//	/*
+//	 * Reduce F and G repeatedly while the processing works.
+//	 */
 	prev_maxbl_FG = (uint32_t)-1;
 	FGlen = llen;
+
 	for (;;) {
 		uint32_t maxbl_F, maxbl_G, scale_FG, scale_k;
 		uint64_t max_kx;
@@ -5046,15 +5274,15 @@ solve_NTRU_intermediate(falcon_keygen *fk,
 		poly_big_to_fp(rt2, Gt, FGlen, llen,
 			logn, full, maxbl_FG, scale_FG);
 
-		if (fk->ternary) {
-			falcon_FFT3(rt1, logn, full);
-			falcon_FFT3(rt2, logn, full);
-			falcon_poly_mul_fft3(rt1, rt3, logn, full);
-			falcon_poly_mul_fft3(rt2, rt4, logn, full);
-			falcon_poly_add_fft3(rt2, rt1, logn, full);
-			falcon_poly_mul_autoadj_fft3(rt2, rt5, logn, full);
-			falcon_iFFT3(rt2, logn, full);
-		} else {
+//		if (fk->ternary) {
+//			falcon_FFT3(rt1, logn, full);
+//			falcon_FFT3(rt2, logn, full);
+//			falcon_poly_mul_fft3(rt1, rt3, logn, full);
+//			falcon_poly_mul_fft3(rt2, rt4, logn, full);
+//			falcon_poly_add_fft3(rt2, rt1, logn, full);
+//			falcon_poly_mul_autoadj_fft3(rt2, rt5, logn, full);
+//			falcon_iFFT3(rt2, logn, full);
+//		} else {
 			falcon_FFT(rt1, logn);
 			falcon_FFT(rt2, logn);
 			falcon_poly_mul_fft(rt1, rt3, logn);
@@ -5062,7 +5290,7 @@ solve_NTRU_intermediate(falcon_keygen *fk,
 			falcon_poly_add_fft(rt2, rt1, logn);
 			falcon_poly_mul_autoadj_fft(rt2, rt5, logn);
 			falcon_iFFT(rt2, logn);
-		}
+//		}
 
 		/*
 		 * Get the maximum coefficient of k, then adjust scaling
@@ -5072,10 +5300,39 @@ solve_NTRU_intermediate(falcon_keygen *fk,
 		for (u = 0; u < n; u ++) {
 			int64_t kx;
 
-			kx = fpr_rint(rt2[u]);
-			if (kx < 0) {
-				kx = -kx;
+//			kx = fpr_rint(rt2[u]);
+			int64_t *temp_check = &rt2[u].v;
+			int64_t exponent = temp_check[0];
+			int64_t temp_check5;
+			uint8_t temp_check4 = 0; //Oonly for negative.
+			exponent &= 0x7FF0000000000000;
+			exponent = exponent >> 52;
+			if(exponent <= 1024) {
+				kx = 0;
+			} else {
+				kx = temp_check[0] | 0x10000000000000;
+				kx = kx & 0x1FFFFFFFFFFFFF;
+				temp_check5 = kx;
+				kx = kx >> (1023 + 52 - exponent);
+				temp_check4 = (temp_check5 != (kx << (1023 + 52 - exponent))) ? 1 : 0;
 			}
+			if(temp_check[0] < 0) {
+				kx += temp_check4;
+			}
+//			printf("float value = %x %x %x %x %x %x %x %x\n",temp_check[0] & 0xFF,temp_check[1] & 0xFF
+//					,temp_check[2] & 0xFF,temp_check[3] & 0xFF,temp_check[4] & 0xFF,temp_check[5] & 0xFF
+//					,temp_check[6] & 0xFF,temp_check[7] & 0xFF);
+//			printf("Int value = %llx\n", kx);
+//			printf("Int value = %lld\n", kx);
+//			printf("Int value = %llx\n",(temp_check[0] & 0x1FFFFFFF000000) >> 24);
+//			printf("Int value = %lld\n",(temp_check[0] & 0x1FFFFFFF000000) >> 24);
+//			printf("Int value = %llx\n",(((temp_check[0] & 0x1FFFFFFF000000) >> 24) ^ 0xFFFFFFFFFFFFFFFF));
+//			printf("Int value = %lld\n",(((temp_check[0] & 0x1FFFFFFF000000) >> 24) ^ 0xFFFFFFFFFFFFFFFF));
+//			printf("int value = %x\n",kx & 0xFF);
+//			kx = fpr_to_llint(rt2[u]);
+//			if (kx < 0) {
+//				kx = -kx;
+//			}
 			if ((uint64_t)kx > max_kx) {
 				max_kx = kx;
 			}
@@ -5105,7 +5362,27 @@ solve_NTRU_intermediate(falcon_keygen *fk,
 		for (u = 0; u < n; u ++) {
 			int64_t kx, ks;
 
-			kx = fpr_rint(rt2[u]);
+#ifdef DEBUG
+//			kx = fpr_rint(rt2[u]);
+			int64_t *temp_check = &rt2[u].v;
+			int64_t exponent = temp_check[0];
+			int64_t temp_check5;
+			uint8_t temp_check4 = 0; //Only for negative.
+			exponent &= 0x7FF0000000000000;
+			exponent = exponent >> 52;
+			if(exponent <= 1024) {
+				kx = 0;
+			} else {
+				kx = temp_check[0] | 0x10000000000000;
+				kx = kx & 0x1FFFFFFFFFFFFF;
+				temp_check5 = kx;
+				kx = kx >> (1023 + 52 - exponent);
+				temp_check4 = (temp_check5 == (kx << (1023 + 52 - exponent))) ? 1 : 0;
+			}
+			if(temp_check[0] < 0) {
+				kx = (kx ^0xFFFFFFFFFFFFFFFF) + temp_check4;
+			}
+#endif
 			if (kx < 0) {
 				ks = -(int32_t)((-kx) >> scale_k);
 			} else {
@@ -5113,6 +5390,7 @@ solve_NTRU_intermediate(falcon_keygen *fk,
 			}
 			k[u] = ks;
 		}
+#ifdef DEBUG
 
 		/*
 		 * If we are at low depth, then we use the NTT to
@@ -5121,19 +5399,21 @@ solve_NTRU_intermediate(falcon_keygen *fk,
 		if (depth <= DEPTH_INT_FG) {
 			poly_sub_scaled_ntt(Ft, FGlen, llen, ft, slen, slen,
 				k, scale_FG - maxbl_fg,
-				logn, full, fk->ternary, t1);
+				logn, full, 0, t1);
 			poly_sub_scaled_ntt(Gt, FGlen, llen, gt, slen, slen,
 				k, scale_FG - maxbl_fg,
-				logn, full, fk->ternary, t1);
+				logn, full, 0, t1);
 		} else {
 			poly_sub_scaled(Ft, FGlen, llen, ft, slen, slen,
 				k, scale_FG - maxbl_fg,
-				logn, full, fk->ternary);
+				logn, full, 0);
 			poly_sub_scaled(Gt, FGlen, llen, gt, slen, slen,
 				k, scale_FG - maxbl_fg,
-				logn, full, fk->ternary);
+				logn, full, 0);
 		}
+#endif
 	}
+#ifdef DEBUG
 
 	/*
 	 * If we could not reduce F and G so that they fit in slen, then
@@ -5150,7 +5430,9 @@ solve_NTRU_intermediate(falcon_keygen *fk,
 	for (u = 0, x = fk->tmp, y = fk->tmp;
 		u < (n << 1); u ++, x += slen, y += llen)
 	{
-		memmove(x, y, slen * sizeof *y);
+		//memmove(x, y, slen * sizeof *y);
+		for(loop=0;loop<slen;loop++)
+			x[loop] = y[loop];
 	}
 
 	/*
@@ -5168,7 +5450,8 @@ solve_NTRU_intermediate(falcon_keygen *fk,
 			}
 		}
 	}
-
+#endif
+#endif
 	return 1;
 }
 
@@ -5178,9 +5461,9 @@ solve_NTRU_intermediate(falcon_keygen *fk,
  *
  * Returned value: 1 on success, 0 on error.
  */
-static int
+int
 solve_NTRU_binary_depth1(falcon_keygen *fk,
-	const int16_t *f, const int16_t *g)
+	const int16_t f[1024], const int16_t g[1024])
 {
 	/*
 	 * The first half of this function is a copy of the corresponding
@@ -5196,6 +5479,7 @@ solve_NTRU_binary_depth1(falcon_keygen *fk,
 	fpr *rt1, *rt2, *rt3, *rt4, *rt5, *rt6;
 	uint32_t maxbl_f, maxbl_g, maxbl_fg, maxbl_F, maxbl_G, maxbl_FG;
 	uint32_t *x, *y;
+	int loop;
 
 	depth = 1;
 	logn_top = fk->logn;
@@ -5268,6 +5552,8 @@ solve_NTRU_binary_depth1(falcon_keygen *fk,
 	 * Now Fd and Gd are not needed anymore; we can squeeze them out.
 	 */
 	memmove(fk->tmp, Ft, llen * n * sizeof(uint32_t));
+//	for(loop=0;loop<llen*n;loop++)
+//		fk->tmp[loop] =Ft[loop];
 	Ft = fk->tmp;
 	memmove(Ft + llen * n, Gt, llen * n * sizeof(uint32_t));
 	Gt = Ft + llen * n;
@@ -5430,8 +5716,8 @@ solve_NTRU_binary_depth1(falcon_keygen *fk,
 	 * and G are consecutive, and thus can be rebuilt in a single
 	 * loop; similarly, the elements of f and g are consecutive.
 	 */
-	zint_rebuild_CRT(Ft, llen, llen, n << 1, PRIMES2, 1, t1);
-	zint_rebuild_CRT(ft, slen, slen, n << 1, PRIMES2, 1, t1);
+	zint_rebuild_CRT(Ft, llen, llen, n << 1, 1, t1);
+	zint_rebuild_CRT(ft, slen, slen, n << 1, 1, t1);
 
 	/*
 	 * Here starts the Babai reduction, specialized for depth = 1.
@@ -5565,9 +5851,9 @@ solve_NTRU_binary_depth1(falcon_keygen *fk,
  *
  * Returned value: 1 on success, 0 on error.
  */
-static int
+int
 solve_NTRU_binary_depth0(falcon_keygen *fk,
-	const int16_t *f, const int16_t *g)
+	const int16_t f[1024], const int16_t g[1024])
 {
 	unsigned logn;
 	size_t n, hn, u;
@@ -5758,12 +6044,12 @@ solve_NTRU_binary_depth0(falcon_keygen *fk,
 	 * representation are actually real, so we can truncate off
 	 * the imaginary parts.
 	 */
-	rt3 = align_fpr(fk->tmp, t3);
+	rt3 = t3;//align_fpr(fk->tmp, t3);
 	for (u = 0; u < n; u ++) {
 		rt3[u] = fpr_of(((int32_t *)t2)[u]);
 	}
 	falcon_FFT(rt3, logn);
-	rt2 = align_fpr(fk->tmp, t2);
+	rt2 = t2;//align_fpr(fk->tmp, t2);
 	memmove(rt2, rt3, hn * sizeof *rt3);
 
 	/*
@@ -5782,7 +6068,35 @@ solve_NTRU_binary_depth0(falcon_keygen *fk,
 	falcon_poly_div_autoadj_fft(rt3, rt2, logn);
 	falcon_iFFT(rt3, logn);
 	for (u = 0; u < n; u ++) {
+#ifdef DEBUG
 		t1[u] = modp_set((int32_t)fpr_rint(rt3[u]), p);
+		uint64_t temp_comp = fpr_rint(rt3[u]);
+#else
+		uint64_t kx;
+		int64_t *temp_check = &rt3[u].v;
+		int64_t exponent = temp_check[0];
+		int64_t temp_check5;
+		uint8_t temp_check4 = 0; //Only for negative.
+		exponent &= 0x7FF0000000000000;
+		exponent = exponent >> 52;
+		if(exponent <= 1024) {
+			kx = 0;
+		} else {
+			kx = temp_check[0] | 0x10000000000000;
+			kx = kx & 0x1FFFFFFFFFFFFF;
+			temp_check5 = kx;
+			kx = kx >> (1023 + 52 - exponent);
+//			kx = kx >> 1 + (kx&1);
+			temp_check4 = (temp_check5 == (kx << (1023 + 52 - exponent))) ? 1 : 0;
+		}
+		if(temp_check[0] < 0) {
+			kx = (kx ^0xFFFFFFFFFFFFFFFF) + temp_check4;
+		}
+		if(temp_comp != kx) {
+			printf("%d : %llx != %llx, %lf\n",u,kx,temp_comp,rt3[u].v);
+		}
+		t1[u] = modp_set(kx, p);
+#endif
 	}
 
 	/*
@@ -6059,14 +6373,14 @@ solve_NTRU_ternary_depth0(falcon_keygen *fk,
  * Solve the NTRU equation. Returned value is 1 on success, 0 on error.
  */
 static int
-solve_NTRU(falcon_keygen *fk, int16_t *F, int16_t *G,
-	const int16_t *f, const int16_t *g)
+solve_NTRU(falcon_keygen *fk, int16_t F[1024], int16_t G[1024],
+	const int16_t f[1024], const int16_t g[1024])
 {
 	unsigned logn;
 	size_t n, u;
 	uint32_t *ft, *gt, *Ft, *Gt, *gm;
 	uint32_t p, p0i, r;
-	const small_prime *primes;
+//	const small_prime *primes;
 
 	logn = fk->logn;
 	n = MKN(logn, fk->ternary);
@@ -6081,29 +6395,30 @@ solve_NTRU(falcon_keygen *fk, int16_t *F, int16_t *G,
 	 * do not fit the hypotheses in solve_NTRU_binary_depth0()
 	 * or solve_NTRU_ternary_depth0().
 	 */
-	if (logn <= 2) {
+//	if (logn <= 2) {
+//		unsigned depth;
+//
+//		depth = logn;
+//		while (depth -- > 0) {
+//			if (!solve_NTRU_intermediate(fk, f, g, depth)) {
+//				return 0;
+//			}
+//		}
+//	} else {
 		unsigned depth;
 
 		depth = logn;
-		while (depth -- > 0) {
-			if (!solve_NTRU_intermediate(fk, f, g, depth)) {
-				return 0;
-			}
-		}
-	} else {
-		unsigned depth;
-
-		depth = logn;
-		if (fk->ternary) {
-			while (depth -- > 1) {
-				if (!solve_NTRU_intermediate(fk, f, g, depth)) {
-					return 0;
-				}
-			}
-			if (!solve_NTRU_ternary_depth0(fk, f, g)) {
-				return 0;
-			}
-		} else {
+//		if (fk->ternary) {
+//			while (depth -- > 1) {
+//				if (!solve_NTRU_intermediate(fk, f, g, depth)) {
+//					return 0;
+//				}
+//			}
+//			if (!solve_NTRU_ternary_depth0(fk, f, g)) {
+//				return 0;
+//			}
+//		} else {
+#ifdef DEBUG
 			while (depth -- > 2) {
 				if (!solve_NTRU_intermediate(fk, f, g, depth)) {
 					return 0;
@@ -6115,8 +6430,8 @@ solve_NTRU(falcon_keygen *fk, int16_t *F, int16_t *G,
 			if (!solve_NTRU_binary_depth0(fk, f, g)) {
 				return 0;
 			}
-		}
-	}
+//		}
+//	}
 
 	/*
 	 * Final F and G are in fk->tmp, one word per coefficient
@@ -6139,33 +6454,33 @@ solve_NTRU(falcon_keygen *fk, int16_t *F, int16_t *G,
 	Gt = Ft + n;
 	gm = Gt + n;
 
-	primes = fk->ternary ? PRIMES3 : PRIMES2;
-	p = primes[0].p;
+//	primes = fk->ternary ? PRIMES3 : PRIMES2;
+	p = PRIMES2[0].p;
 	p0i = modp_ninv31(p);
-	if (fk->ternary) {
-		modp_mkgm3(gm, ft, logn, 1, primes[0].g, p, p0i);
-	} else {
-		modp_mkgm2(gm, ft, logn, primes[0].g, p, p0i);
-	}
+//	if (fk->ternary) {
+//		modp_mkgm3(gm, ft, logn, 1, PRIMES2[0].g, p, p0i);
+//	} else {
+		modp_mkgm2(gm, ft, logn, PRIMES2[0].g, p, p0i);
+//	}
 	for (u = 0; u < n; u ++) {
 		ft[u] = modp_set(f[u], p);
 		gt[u] = modp_set(g[u], p);
 		Ft[u] = modp_set(F[u], p);
 		Gt[u] = modp_set(G[u], p);
 	}
-	if (fk->ternary) {
-		modp_NTT3(ft, gm, logn, 1, p, p0i);
-		modp_NTT3(gt, gm, logn, 1, p, p0i);
-		modp_NTT3(Ft, gm, logn, 1, p, p0i);
-		modp_NTT3(Gt, gm, logn, 1, p, p0i);
-		r = modp_montymul(18433, 1, p, p0i);
-	} else {
+//	if (fk->ternary) {
+//		modp_NTT3(ft, gm, logn, 1, p, p0i);
+//		modp_NTT3(gt, gm, logn, 1, p, p0i);
+//		modp_NTT3(Ft, gm, logn, 1, p, p0i);
+//		modp_NTT3(Gt, gm, logn, 1, p, p0i);
+//		r = modp_montymul(18433, 1, p, p0i);
+//	} else {
 		modp_NTT2(ft, gm, logn, p, p0i);
 		modp_NTT2(gt, gm, logn, p, p0i);
 		modp_NTT2(Ft, gm, logn, p, p0i);
 		modp_NTT2(Gt, gm, logn, p, p0i);
 		r = modp_montymul(12289, 1, p, p0i);
-	}
+//	}
 	for (u = 0; u < n; u ++) {
 		uint32_t z;
 
@@ -6175,6 +6490,7 @@ solve_NTRU(falcon_keygen *fk, int16_t *F, int16_t *G,
 			return 0;
 		}
 	}
+#endif
 
 	return 1;
 }
@@ -6212,8 +6528,8 @@ poly_small_mkgauss(falcon_keygen *fk, int16_t *f, unsigned logn)
 /* see falcon.h */
 int
 falcon_keygen_make(falcon_keygen *fk, int comp,
-	void *privkey, size_t *privkey_len,
-	void *pubkey, size_t *pubkey_len)
+	unsigned char *privkey, size_t *privkey_len,
+	unsigned char *pubkey, size_t *pubkey_len)
 {
 	/*
 	 * Algorithm is the following:
@@ -6240,8 +6556,21 @@ falcon_keygen_make(falcon_keygen *fk, int comp,
 	uint16_t h[1024];
 	size_t klen, skoff;
 	unsigned char *skbuf;
-	int16_t *ske[4];
+//	int16_t *ske[4];
 	int i;
+	size_t elen;
+
+	fpr *rt1, *rt2, *rt3;
+	size_t hn;
+	fpr sigma, norm, bound;
+	uint32_t a, b;
+	uint64_t c;
+	//fpr *rt1, *rt2, *rt3;
+	fpr bnorm;
+	uint32_t normf, normg, normh;
+	int loop = 0,loop2;
+
+
 
 	logn = fk->logn;
 	ter = fk->ternary;
@@ -6279,101 +6608,97 @@ falcon_keygen_make(falcon_keygen *fk, int comp,
 	 * In both cases, we require that Res(f,phi) and Res(g,phi) are
 	 * both odd (the NTRU equation solver requires it).
 	 */
-	for (;;) {
-		if (ter) {
-			fpr *rt1, *rt2, *rt3;
-			size_t hn;
-			fpr sigma, norm, bound;
-
-			hn = n >> 1;
-
-			/*
-			 * Generate f and g in FFT representation (in rt1
-			 * and rt2, respectively); we must then convert
-			 * them back to non-FFT to apply rounding.
-			 */
-			rt1 = (fpr *)fk->tmp;
-			rt2 = rt1 + n;
-			rt3 = rt2 + n;
-			sigma = fpr_sqrt(fpr_div(fpr_of(18433),
-				fpr_sqrt(fpr_of(8))));
-			for (u = 0; u < hn; u ++) {
-				uint32_t a, b;
-				uint64_t c;
-
-				c = get_rng_u64(&fk->rng);
-				a = (uint32_t)c;
-				b = (uint32_t)(c >> 32);
-				fpr_gauss(&rt1[u], &rt1[u + hn], sigma, a, b);
-				c = get_rng_u64(&fk->rng);
-				a = (uint32_t)c;
-				b = (uint32_t)(c >> 32);
-				fpr_gauss(&rt2[u], &rt2[u + hn], sigma, a, b);
-			}
-			falcon_iFFT3(rt1, logn, 1);
-			falcon_iFFT3(rt2, logn, 1);
-			for (u = 0; u < n; u ++) {
-				f[u] = (int16_t)fpr_rint(rt1[u]);
-				g[u] = (int16_t)fpr_rint(rt2[u]);
-			}
-
-			if (mod2_res_ternary(f, logn) == 0) {
-				continue;
-			}
-			if (mod2_res_ternary(g, logn) == 0) {
-				continue;
-			}
-
-			/*
-			 * Convert back to FFT to compute norms. Bound on
-			 * the squared norm of (g,-f) (in FFT representation)
-			 * is 4*N*q/sqrt(8).
-			 *
-			 * Note that our FFT contains only half the values,
-			 * so we must double the sum.
-			 */
-			bound = fpr_div(fpr_of(73732L * (long)n),
-				fpr_sqrt(fpr_of(8)));
-
-			poly_small_to_fp(rt1, f, logn, 1);
-			poly_small_to_fp(rt2, g, logn, 1);
-			falcon_FFT3(rt1, logn, 1);
-			falcon_FFT3(rt2, logn, 1);
-			norm = fpr_of(0);
-			for (u = 0; u < n; u ++) {
-				norm = fpr_add(norm, fpr_sqr(rt1[u]));
-				norm = fpr_add(norm, fpr_sqr(rt2[u]));
-			}
-			norm = fpr_double(norm);
-
-			if (!fpr_lt(norm, bound)) {
-				continue;
-			}
-
-			/*
-			 * Orthogonalized vector.
-			 */
-			falcon_poly_invnorm2_fft3(rt3, rt1, rt2, logn, 1);
-			falcon_poly_adj_fft3(rt1, logn, 1);
-			falcon_poly_adj_fft3(rt2, logn, 1);
-			falcon_poly_mulconst_fft3(rt1, fpr_of(18433), logn, 1);
-			falcon_poly_mulconst_fft3(rt2, fpr_of(18433), logn, 1);
-			falcon_poly_mul_autoadj_fft3(rt1, rt3, logn, 1);
-			falcon_poly_mul_autoadj_fft3(rt2, rt3, logn, 1);
-			norm = fpr_of(0);
-			for (u = 0; u < n; u ++) {
-				norm = fpr_add(norm, fpr_sqr(rt1[u]));
-				norm = fpr_add(norm, fpr_sqr(rt2[u]));
-			}
-			norm = fpr_double(norm);
-
-			if (!fpr_lt(norm, bound)) {
-				continue;
-			}
-		} else {
-			fpr *rt1, *rt2, *rt3;
-			fpr bnorm;
-			uint32_t normf, normg, norm;
+	//for (;;) {
+	for(loop=0;loop<1;loop++) {
+		//printf("loop = %d, ter = %d,\n",++loop,ter);
+//		if (ter) {
+//
+//
+//			hn = n >> 1;
+//
+//			/*
+//			 * Generate f and g in FFT representation (in rt1
+//			 * and rt2, respectively); we must then convert
+//			 * them back to non-FFT to apply rounding.
+//			 */
+//			rt1 = (fpr *)fk->tmp;
+//			rt2 = rt1 + n;
+//			rt3 = rt2 + n;
+//			sigma = fpr_sqrt(fpr_div(fpr_of(18433),
+//				fpr_sqrt(fpr_of(8))));
+//			for (u = 0; u < hn; u ++) {
+//
+//
+//				c = get_rng_u64(&fk->rng);
+//				a = (uint32_t)c;
+//				b = (uint32_t)(c >> 32);
+//				fpr_gauss(&rt1[u], &rt1[u + hn], sigma, a, b);
+//				c = get_rng_u64(&fk->rng);
+//				a = (uint32_t)c;
+//				b = (uint32_t)(c >> 32);
+//				fpr_gauss(&rt2[u], &rt2[u + hn], sigma, a, b);
+//			}
+//			falcon_iFFT3(rt1, logn, 1);
+//			falcon_iFFT3(rt2, logn, 1);
+//			for (u = 0; u < n; u ++) {
+//				f[u] = (int16_t)fpr_rint(rt1[u]);
+//				g[u] = (int16_t)fpr_rint(rt2[u]);
+//			}
+//
+//			if (mod2_res_ternary(f, logn) == 0) {
+//				continue;
+//			}
+//			if (mod2_res_ternary(g, logn) == 0) {
+//				continue;
+//			}
+//
+//			/*
+//			 * Convert back to FFT to compute norms. Bound on
+//			 * the squared norm of (g,-f) (in FFT representation)
+//			 * is 4*N*q/sqrt(8).
+//			 *
+//			 * Note that our FFT contains only half the values,
+//			 * so we must double the sum.
+//			 */
+//			bound = fpr_div(fpr_of(73732L * (long)n),
+//				fpr_sqrt(fpr_of(8)));
+//
+//			poly_small_to_fp(rt1, f, logn, 1);
+//			poly_small_to_fp(rt2, g, logn, 1);
+//			falcon_FFT3(rt1, logn, 1);
+//			falcon_FFT3(rt2, logn, 1);
+//			norm = fpr_of(0);
+//			for (u = 0; u < n; u ++) {
+//				norm = fpr_add(norm, fpr_sqr(rt1[u]));
+//				norm = fpr_add(norm, fpr_sqr(rt2[u]));
+//			}
+//			norm = fpr_double(norm);
+//
+//			if (!fpr_lt(norm, bound)) {
+//				continue;
+//			}
+//
+//			/*
+//			 * Orthogonalized vector.
+//			 */
+//			falcon_poly_invnorm2_fft3(rt3, rt1, rt2, logn, 1);
+//			falcon_poly_adj_fft3(rt1, logn, 1);
+//			falcon_poly_adj_fft3(rt2, logn, 1);
+//			falcon_poly_mulconst_fft3(rt1, fpr_of(18433), logn, 1);
+//			falcon_poly_mulconst_fft3(rt2, fpr_of(18433), logn, 1);
+//			falcon_poly_mul_autoadj_fft3(rt1, rt3, logn, 1);
+//			falcon_poly_mul_autoadj_fft3(rt2, rt3, logn, 1);
+//			norm = fpr_of(0);
+//			for (u = 0; u < n; u ++) {
+//				norm = fpr_add(norm, fpr_sqr(rt1[u]));
+//				norm = fpr_add(norm, fpr_sqr(rt2[u]));
+//			}
+//			norm = fpr_double(norm);
+//
+//			if (!fpr_lt(norm, bound)) {
+//				continue;
+//			}
+//		} else {
 
 			/*
 			 * The poly_small_mkgauss() function makes sure
@@ -6393,14 +6718,14 @@ falcon_keygen_make(falcon_keygen *fk, int comp,
 			 */
 			normf = poly_small_sqnorm(f, logn, ter);
 			normg = poly_small_sqnorm(g, logn, ter);
-			norm = (normf + normg) | -((normf | normg) >> 31);
-			if (norm >= 16823) {
+			normh = (normf + normg) | -((normf | normg) >> 31);
+			if (normh >= 16823) {
 				continue;
 			}
-
-			/*
-			 * We compute the orthogonalized vector norm.
-			 */
+//
+//			/*
+//			 * We compute the orthogonalized vector norm.
+//			 */
 			rt1 = (fpr *)fk->tmp;
 			rt2 = rt1 + n;
 			rt3 = rt2 + n;
@@ -6427,19 +6752,32 @@ falcon_keygen_make(falcon_keygen *fk, int comp,
 			{
 				continue;
 			}
-		}
+//		}
 
 		/*
 		 * Compute public key h = g/f mod X^N+1 mod q. If this
 		 * fails, we must restart.
 		 */
+//			for(loop2=0;loop2<1024;loop2++)
+//				printf("f[%d] = %d; ",loop2,f[loop2]);
+//			printf("\n");
+//			for(loop2=0;loop2<1024;loop2++)
+//				printf("g[%d] = %d; ",loop2,g[loop2]);
+//			printf("\n");
+//			f[0] = -2; f[1] = 2; f[2] = 5; f[3] = 3; f[4] = 1; f[5] = -4; f[6] = 2; f[7] = 5; f[8] = -2; f[9] = 6; f[10] = 2; f[11] = -1; f[12] = -8; f[13] = 3; f[14] = 1; f[15] = -3; f[16] = -4; f[17] = 9; f[18] = 0; f[19] = 3; f[20] = -6; f[21] = -1; f[22] = 9; f[23] = 6; f[24] = 9; f[25] = -4; f[26] = 3; f[27] = 3; f[28] = 2; f[29] = 0; f[30] = 0; f[31] = 6; f[32] = -6; f[33] = -2; f[34] = 1; f[35] = -3; f[36] = 4; f[37] = -4; f[38] = 3; f[39] = 1; f[40] = -2; f[41] = 1; f[42] = 3; f[43] = -3; f[44] = -4; f[45] = -1; f[46] = -6; f[47] = -6; f[48] = -4; f[49] = -2; f[50] = -6; f[51] = 0; f[52] = 0; f[53] = 6; f[54] = 1; f[55] = -6; f[56] = 1; f[57] = -2; f[58] = 1; f[59] = 7; f[60] = 2; f[61] = 0; f[62] = -1; f[63] = 2; f[64] = -2; f[65] = -4; f[66] = 4; f[67] = 0; f[68] = 0; f[69] = 4; f[70] = 1; f[71] = -2; f[72] = -8; f[73] = -1; f[74] = -2; f[75] = -4; f[76] = -1; f[77] = 6; f[78] = -5; f[79] = 0; f[80] = 0; f[81] = 0; f[82] = 3; f[83] = 0; f[84] = -1; f[85] = 2; f[86] = 1; f[87] = 0; f[88] = -1; f[89] = 1; f[90] = 0; f[91] = 4; f[92] = 0; f[93] = 2; f[94] = 2; f[95] = 5; f[96] = 0; f[97] = 4; f[98] = -8; f[99] = 2; f[100] = 3; f[101] = 0; f[102] = 0; f[103] = 0; f[104] = -8; f[105] = 3; f[106] = -2; f[107] = -3; f[108] = -4; f[109] = 1; f[110] = -4; f[111] = 7; f[112] = -6; f[113] = 0; f[114] = 6; f[115] = 5; f[116] = 5; f[117] = 1; f[118] = -2; f[119] = -4; f[120] = -3; f[121] = -6; f[122] = -2; f[123] = 4; f[124] = 0; f[125] = 0; f[126] = 7; f[127] = -5; f[128] = 1; f[129] = 2; f[130] = 13; f[131] = 3; f[132] = -2; f[133] = 2; f[134] = 6; f[135] = 9; f[136] = 9; f[137] = 0; f[138] = -7; f[139] = 4; f[140] = -6; f[141] = -2; f[142] = -7; f[143] = 3; f[144] = 4; f[145] = -2; f[146] = 1; f[147] = 6; f[148] = -1; f[149] = -5; f[150] = 5; f[151] = -5; f[152] = 1; f[153] = 4; f[154] = -1; f[155] = 1; f[156] = 0; f[157] = 5; f[158] = 3; f[159] = -3; f[160] = 1; f[161] = 3; f[162] = 0; f[163] = -3; f[164] = 2; f[165] = -1; f[166] = -4; f[167] = 5; f[168] = -3; f[169] = -1; f[170] = 4; f[171] = -5; f[172] = 0; f[173] = 4; f[174] = 0; f[175] = 0; f[176] = 2; f[177] = 2; f[178] = -6; f[179] = -1; f[180] = 10; f[181] = -2; f[182] = 5; f[183] = 5; f[184] = 2; f[185] = -2; f[186] = 3; f[187] = -3; f[188] = 0; f[189] = 0; f[190] = -3; f[191] = 4; f[192] = 7; f[193] = -8; f[194] = 2; f[195] = -6; f[196] = 2; f[197] = 1; f[198] = 1; f[199] = 8; f[200] = 0; f[201] = 0; f[202] = -5; f[203] = -2; f[204] = 2; f[205] = -4; f[206] = 2; f[207] = -1; f[208] = 2; f[209] = -1; f[210] = 3; f[211] = 4; f[212] = 3; f[213] = 7; f[214] = 0; f[215] = -1; f[216] = 1; f[217] = 3; f[218] = -2; f[219] = 1; f[220] = 0; f[221] = -2; f[222] = 2; f[223] = -1; f[224] = -1; f[225] = 4; f[226] = -3; f[227] = -6; f[228] = -1; f[229] = 4; f[230] = -6; f[231] = 3; f[232] = 9; f[233] = 4; f[234] = -1; f[235] = 0; f[236] = 0; f[237] = 3; f[238] = 0; f[239] = -1; f[240] = -6; f[241] = 2; f[242] = 2; f[243] = -13; f[244] = 1; f[245] = -4; f[246] = -1; f[247] = 3; f[248] = 3; f[249] = -3; f[250] = -1; f[251] = -10; f[252] = -1; f[253] = 0; f[254] = 2; f[255] = 1; f[256] = 1; f[257] = 1; f[258] = 2; f[259] = 0; f[260] = -4; f[261] = -1; f[262] = -8; f[263] = -5; f[264] = 0; f[265] = 3; f[266] = -8; f[267] = 7; f[268] = -2; f[269] = 1; f[270] = 2; f[271] = 1; f[272] = -4; f[273] = 2; f[274] = 2; f[275] = 0; f[276] = -5; f[277] = -1; f[278] = 0; f[279] = -2; f[280] = 0; f[281] = 3; f[282] = 3; f[283] = 5; f[284] = 0; f[285] = -3; f[286] = -3; f[287] = 4; f[288] = 5; f[289] = 1; f[290] = 2; f[291] = -6; f[292] = -2; f[293] = 4; f[294] = 7; f[295] = 3; f[296] = 3; f[297] = -8; f[298] = 2; f[299] = -1; f[300] = -2; f[301] = -1; f[302] = -4; f[303] = -2; f[304] = -5; f[305] = 1; f[306] = 4; f[307] = -4; f[308] = -1; f[309] = 10; f[310] = -5; f[311] = 3; f[312] = 2; f[313] = 2; f[314] = 4; f[315] = -3; f[316] = -1; f[317] = 0; f[318] = -4; f[319] = 2; f[320] = 3; f[321] = -5; f[322] = 4; f[323] = 1; f[324] = 1; f[325] = -2; f[326] = -5; f[327] = 4; f[328] = 3; f[329] = 5; f[330] = 3; f[331] = -3; f[332] = -5; f[333] = 1; f[334] = -1; f[335] = 0; f[336] = -4; f[337] = -1; f[338] = -2; f[339] = -2; f[340] = -1; f[341] = -6; f[342] = -1; f[343] = 3; f[344] = 0; f[345] = 1; f[346] = 9; f[347] = 1; f[348] = 3; f[349] = -2; f[350] = -5; f[351] = -4; f[352] = -5; f[353] = 1; f[354] = -1; f[355] = 2; f[356] = -2; f[357] = 2; f[358] = -1; f[359] = -7; f[360] = -4; f[361] = 1; f[362] = 5; f[363] = -2; f[364] = -2; f[365] = 8; f[366] = 1; f[367] = 3; f[368] = 3; f[369] = 4; f[370] = -1; f[371] = -3; f[372] = -2; f[373] = -6; f[374] = -7; f[375] = -5; f[376] = -3; f[377] = -2; f[378] = -2; f[379] = 3; f[380] = 3; f[381] = -7; f[382] = 6; f[383] = -1; f[384] = 2; f[385] = 1; f[386] = 7; f[387] = 1; f[388] = -7; f[389] = 1; f[390] = 3; f[391] = -4; f[392] = -2; f[393] = -2; f[394] = -2; f[395] = 3; f[396] = -6; f[397] = -5; f[398] = -3; f[399] = -3; f[400] = 7; f[401] = 0; f[402] = 3; f[403] = 2; f[404] = 0; f[405] = 2; f[406] = -6; f[407] = 1; f[408] = -5; f[409] = 0; f[410] = -5; f[411] = 1; f[412] = 6; f[413] = 5; f[414] = -3; f[415] = 5; f[416] = 3; f[417] = -5; f[418] = 1; f[419] = 3; f[420] = -7; f[421] = 1; f[422] = 4; f[423] = -5; f[424] = 3; f[425] = 3; f[426] = 1; f[427] = 5; f[428] = 5; f[429] = -6; f[430] = -3; f[431] = 1; f[432] = 0; f[433] = 3; f[434] = -5; f[435] = -4; f[436] = 2; f[437] = -9; f[438] = 4; f[439] = 4; f[440] = -1; f[441] = 8; f[442] = -4; f[443] = 4; f[444] = -3; f[445] = -3; f[446] = -2; f[447] = 6; f[448] = 3; f[449] = 0; f[450] = 3; f[451] = 2; f[452] = -8; f[453] = 3; f[454] = -2; f[455] = -4; f[456] = 7; f[457] = -3; f[458] = -2; f[459] = -5; f[460] = -4; f[461] = -7; f[462] = 2; f[463] = 0; f[464] = 5; f[465] = 1; f[466] = -7; f[467] = -2; f[468] = -3; f[469] = -1; f[470] = -3; f[471] = -3; f[472] = -8; f[473] = 5; f[474] = -1; f[475] = 0; f[476] = -5; f[477] = -5; f[478] = 2; f[479] = 5; f[480] = 9; f[481] = 7; f[482] = 4; f[483] = 3; f[484] = -5; f[485] = 0; f[486] = 0; f[487] = 1; f[488] = 0; f[489] = 3; f[490] = -4; f[491] = 1; f[492] = 3; f[493] = -3; f[494] = -2; f[495] = -7; f[496] = -4; f[497] = 5; f[498] = 6; f[499] = 4; f[500] = 2; f[501] = 1; f[502] = -2; f[503] = -3; f[504] = 1; f[505] = -1; f[506] = -1; f[507] = -7; f[508] = -4; f[509] = 5; f[510] = 4; f[511] = 1; f[512] = 0; f[513] = 0; f[514] = 0; f[515] = 0; f[516] = 0; f[517] = 0; f[518] = 0; f[519] = 0; f[520] = 0; f[521] = 0; f[522] = 0; f[523] = 0; f[524] = 0; f[525] = 0; f[526] = 0; f[527] = 0; f[528] = 0; f[529] = 0; f[530] = 0; f[531] = 0; f[532] = 0; f[533] = 0; f[534] = 0; f[535] = 0; f[536] = 0; f[537] = 0; f[538] = 0; f[539] = 0; f[540] = 0; f[541] = 0; f[542] = 0; f[543] = 0; f[544] = 0; f[545] = 0; f[546] = 0; f[547] = 0; f[548] = 0; f[549] = 0; f[550] = 0; f[551] = 0; f[552] = 0; f[553] = 0; f[554] = 0; f[555] = 0; f[556] = 0; f[557] = 0; f[558] = 0; f[559] = 0; f[560] = 0; f[561] = 0; f[562] = 0; f[563] = 0; f[564] = 0; f[565] = 0; f[566] = 0; f[567] = 0; f[568] = 0; f[569] = 0; f[570] = 0; f[571] = 0; f[572] = 0; f[573] = 0; f[574] = 0; f[575] = 0; f[576] = 0; f[577] = 0; f[578] = 0; f[579] = 0; f[580] = 0; f[581] = 0; f[582] = 0; f[583] = 0; f[584] = 0; f[585] = 0; f[586] = 0; f[587] = 0; f[588] = 0; f[589] = 0; f[590] = 0; f[591] = 0; f[592] = 0; f[593] = 0; f[594] = 0; f[595] = 0; f[596] = 0; f[597] = 0; f[598] = 0; f[599] = 0; f[600] = 0; f[601] = 0; f[602] = 0; f[603] = 0; f[604] = 22168; f[605] = -1; f[606] = 32767; f[607] = 0; f[608] = 5; f[609] = 0; f[610] = 0; f[611] = 0; f[612] = -1; f[613] = -1; f[614] = -1; f[615] = -1; f[616] = 0; f[617] = 0; f[618] = 0; f[619] = 0; f[620] = -27888; f[621] = 99; f[622] = 0; f[623] = 0; f[624] = 22256; f[625] = -1; f[626] = 32767; f[627] = 0; f[628] = 21072; f[629] = -1; f[630] = 32767; f[631] = 0; f[632] = 10; f[633] = 0; f[634] = 0; f[635] = 0; f[636] = 21072; f[637] = -1; f[638] = 32767; f[639] = 0; f[640] = 10; f[641] = 0; f[642] = 0; f[643] = 0; f[644] = 26906; f[645] = 12709; f[646] = 53; f[647] = 0; f[648] = 13107; f[649] = 0; f[650] = 0; f[651] = 0; f[652] = 0; f[653] = 0; f[654] = 0; f[655] = 0; f[656] = 0; f[657] = 0; f[658] = 0; f[659] = 0; f[660] = 0; f[661] = 0; f[662] = 0; f[663] = 0; f[664] = 0; f[665] = 0; f[666] = 0; f[667] = 0; f[668] = -26986; f[669] = 12640; f[670] = 53; f[671] = 0; f[672] = 0; f[673] = 0; f[674] = 0; f[675] = 0; f[676] = 21296; f[677] = -1; f[678] = 32767; f[679] = 0; f[680] = 0; f[681] = 0; f[682] = 0; f[683] = 0; f[684] = 21296; f[685] = -1; f[686] = 32767; f[687] = 0; f[688] = 11; f[689] = 0; f[690] = 0; f[691] = 0; f[692] = 28920; f[693] = -2222; f[694] = 32767; f[695] = 0; f[696] = -21187; f[697] = 3385; f[698] = 0; f[699] = 0; f[700] = -24606; f[701] = 12640; f[702] = 53; f[703] = 0; f[704] = 0; f[705] = 0; f[706] = 0; f[707] = 0; f[708] = -6476; f[709] = 52; f[710] = 0; f[711] = 0; f[712] = 61; f[713] = 0; f[714] = 0; f[715] = 0; f[716] = 11324; f[717] = 12704; f[718] = 53; f[719] = 0; f[720] = 0; f[721] = 0; f[722] = 0; f[723] = 0; f[724] = 21680; f[725] = -1; f[726] = 32767; f[727] = 0; f[728] = 15432; f[729] = 12704; f[730] = 53; f[731] = 0; f[732] = -22768; f[733] = 12704; f[734] = 53; f[735] = 0; f[736] = 0; f[737] = 0; f[738] = 0; f[739] = 0; f[740] = 0; f[741] = 0; f[742] = 0; f[743] = 0; f[744] = 0; f[745] = 0; f[746] = 0; f[747] = 0; f[748] = 0; f[749] = 0; f[750] = 0; f[751] = 0; f[752] = 0; f[753] = 0; f[754] = 104; f[755] = 0; f[756] = 21472; f[757] = -1; f[758] = 32767; f[759] = 0; f[760] = 21456; f[761] = -1; f[762] = 32767; f[763] = 0; f[764] = 21456; f[765] = -1; f[766] = 32526; f[767] = 0; f[768] = 29056; f[769] = -2222; f[770] = 32767; f[771] = 0; f[772] = -15112; f[773] = -2049; f[774] = 17104; f[775] = 1028; f[776] = 21376; f[777] = -1; f[778] = 32767; f[779] = 0; f[780] = 9874; f[781] = 64; f[782] = 0; f[783] = 0; f[784] = 21472; f[785] = -1; f[786] = 32767; f[787] = 0; f[788] = 21456; f[789] = -1; f[790] = 32767; f[791] = 0; f[792] = 236; f[793] = 0; f[794] = 1; f[795] = -32512; f[796] = 204; f[797] = 0; f[798] = 60; f[799] = 3584; f[800] = 21408; f[801] = -1; f[802] = 32767; f[803] = 0; f[804] = 10075; f[805] = 64; f[806] = 0; f[807] = 0; f[808] = 21456; f[809] = -1; f[810] = 32767; f[811] = 0; f[812] = 21472; f[813] = -1; f[814] = 32767; f[815] = 0; f[816] = 21744; f[817] = -1; f[818] = 32767; f[819] = 0; f[820] = -2681; f[821] = 65; f[822] = 0; f[823] = 0; f[824] = -21187; f[825] = 3385; f[826] = 0; f[827] = 0; f[828] = 21824; f[829] = -1; f[830] = 32767; f[831] = 0; f[832] = 9312; f[833] = 99; f[834] = 0; f[835] = 0; f[836] = 9280; f[837] = 99; f[838] = 0; f[839] = 0; f[840] = 3886; f[841] = 31044; f[842] = 20503; f[843] = -21884; f[844] = -29880; f[845] = 29755; f[846] = 1588; f[847] = -21896; f[848] = 6741; f[849] = -10022; f[850] = 20618; f[851] = -6214; f[852] = 13920; f[853] = 3873; f[854] = 9408; f[855] = -20983; f[856] = -10056; f[857] = 6510; f[858] = 19329; f[859] = 6063; f[860] = -11305; f[861] = 3907; f[862] = 20256; f[863] = -160; f[864] = -13616; f[865] = 28620; f[866] = -26022; f[867] = -30602; f[868] = -21446; f[869] = -30889; f[870] = -30470; f[871] = 10590; f[872] = 7317; f[873] = -17354; f[874] = 22292; f[875] = -21607; f[876] = -31549; f[877] = -23334; f[878] = -13341; f[879] = 23482; f[880] = 16077; f[881] = 32501; f[882] = -23401; f[883] = -2429; f[884] = 2221; f[885] = 29140; f[886] = -32681; f[887] = 22666; f[888] = -11826; f[889] = -10680; f[890] = -31014; f[891] = 32209; f[892] = 537; f[893] = -9973; f[894] = -13830; f[895] = -32079; f[896] = -2540; f[897] = 21478; f[898] = 21123; f[899] = -23195; f[900] = 23086; f[901] = -11087; f[902] = -9607; f[903] = -29637; f[904] = -31112; f[905] = -19798; f[906] = 162; f[907] = -12421; f[908] = 699; f[909] = 5744; f[910] = -13503; f[911] = -27455; f[912] = -29181; f[913] = -12092; f[914] = -9088; f[915] = 30113; f[916] = -31058; f[917] = -24304; f[918] = 23767; f[919] = 11563; f[920] = -13194; f[921] = 27227; f[922] = -13100; f[923] = -23264; f[924] = -12689; f[925] = -19632; f[926] = 1326; f[927] = 10129; f[928] = 3960; f[929] = -7928; f[930] = -11272; f[931] = -27479; f[932] = 21846; f[933] = 13753; f[934] = 2433; f[935] = 6290; f[936] = -12934; f[937] = -14572; f[938] = 430; f[939] = 25140; f[940] = -12351; f[941] = -11932; f[942] = -13585; f[943] = -2315; f[944] = -5844; f[945] = 15946; f[946] = 15060; f[947] = -21789; f[948] = 28546; f[949] = -24742; f[950] = 26115; f[951] = -30776; f[952] = -511; f[953] = -12036; f[954] = -81; f[955] = -19768; f[956] = 12398; f[957] = 25516; f[958] = -1407; f[959] = -27303; f[960] = 8769; f[961] = 12896; f[962] = 6293; f[963] = -26493; f[964] = 30487; f[965] = 2009; f[966] = 4372; f[967] = -32751; f[968] = -29181; f[969] = -12092; f[970] = -9088; f[971] = 30113; f[972] = -31058; f[973] = -24304; f[974] = 23767; f[975] = 11563; f[976] = -13194; f[977] = 27227; f[978] = -13100; f[979] = -23264; f[980] = 16; f[981] = 0; f[982] = 16; f[983] = 0; f[984] = 21856; f[985] = -1; f[986] = 32767; f[987] = 0; f[988] = -1611; f[989] = 65; f[990] = 0; f[991] = 0; f[992] = -12934; f[993] = -14572; f[994] = 430; f[995] = 25140; f[996] = 0; f[997] = 0; f[998] = 0; f[999] = 0; f[1000] = 21968; f[1001] = -1; f[1002] = 32767; f[1003] = 0; f[1004] = 22024; f[1005] = -1; f[1006] = 32767; f[1007] = 0; f[1008] = -3438; f[1009] = -21913; f[1010] = 16378; f[1011] = -13689; f[1012] = 136; f[1013] = 0; f[1014] = 0; f[1015] = 0; f[1016] = 48; f[1017] = 0; f[1018] = 0; f[1019] = 0; f[1020] = 48; f[1021] = 0; f[1022] = 0; f[1023] = 0;
+//			g[0] = -4; g[1] = 4; g[2] = 4; g[3] = 2; g[4] = 3; g[5] = 0; g[6] = 2; g[7] = -6; g[8] = -6; g[9] = 6; g[10] = 0; g[11] = 5; g[12] = 10; g[13] = 3; g[14] = 0; g[15] = -2; g[16] = -5; g[17] = 3; g[18] = -4; g[19] = 2; g[20] = -5; g[21] = 3; g[22] = 3; g[23] = 3; g[24] = -1; g[25] = 11; g[26] = 4; g[27] = -9; g[28] = -2; g[29] = -8; g[30] = 2; g[31] = -5; g[32] = -6; g[33] = -3; g[34] = -4; g[35] = 1; g[36] = -12; g[37] = 8; g[38] = 2; g[39] = 10; g[40] = -3; g[41] = 1; g[42] = 0; g[43] = -3; g[44] = -1; g[45] = 10; g[46] = -2; g[47] = 0; g[48] = -3; g[49] = 0; g[50] = -6; g[51] = -1; g[52] = 2; g[53] = -4; g[54] = -6; g[55] = -3; g[56] = -4; g[57] = 5; g[58] = -2; g[59] = -3; g[60] = 6; g[61] = -2; g[62] = 1; g[63] = 9; g[64] = 2; g[65] = 3; g[66] = -1; g[67] = 2; g[68] = -2; g[69] = 4; g[70] = 5; g[71] = 3; g[72] = -7; g[73] = -4; g[74] = 1; g[75] = 0; g[76] = 6; g[77] = -4; g[78] = -5; g[79] = 4; g[80] = -1; g[81] = -9; g[82] = 2; g[83] = 1; g[84] = 4; g[85] = 4; g[86] = 5; g[87] = 5; g[88] = 2; g[89] = 7; g[90] = -4; g[91] = -4; g[92] = -1; g[93] = 1; g[94] = -3; g[95] = 0; g[96] = 1; g[97] = -8; g[98] = -4; g[99] = -6; g[100] = 4; g[101] = 7; g[102] = -5; g[103] = 10; g[104] = 5; g[105] = 0; g[106] = -5; g[107] = 3; g[108] = -5; g[109] = 11; g[110] = 1; g[111] = -1; g[112] = 4; g[113] = 1; g[114] = -4; g[115] = -2; g[116] = 3; g[117] = 1; g[118] = -6; g[119] = -2; g[120] = 6; g[121] = -5; g[122] = 0; g[123] = -2; g[124] = -3; g[125] = -3; g[126] = -3; g[127] = 1; g[128] = 4; g[129] = 3; g[130] = 0; g[131] = -5; g[132] = 1; g[133] = -1; g[134] = 0; g[135] = -4; g[136] = 5; g[137] = 2; g[138] = 0; g[139] = 3; g[140] = 4; g[141] = 2; g[142] = 1; g[143] = -2; g[144] = 2; g[145] = -1; g[146] = -1; g[147] = 2; g[148] = 3; g[149] = 0; g[150] = 8; g[151] = -3; g[152] = 3; g[153] = -6; g[154] = 0; g[155] = 0; g[156] = -5; g[157] = 0; g[158] = 4; g[159] = 2; g[160] = -1; g[161] = -1; g[162] = -1; g[163] = 8; g[164] = -1; g[165] = 8; g[166] = -6; g[167] = -5; g[168] = 1; g[169] = -1; g[170] = -3; g[171] = 6; g[172] = 5; g[173] = 3; g[174] = -4; g[175] = 0; g[176] = 3; g[177] = -1; g[178] = -4; g[179] = 1; g[180] = -7; g[181] = -3; g[182] = 2; g[183] = -5; g[184] = 2; g[185] = 3; g[186] = 4; g[187] = 0; g[188] = 2; g[189] = 0; g[190] = 1; g[191] = -2; g[192] = 1; g[193] = 1; g[194] = 1; g[195] = 2; g[196] = 1; g[197] = 1; g[198] = 13; g[199] = -4; g[200] = -1; g[201] = -2; g[202] = 0; g[203] = -1; g[204] = 12; g[205] = 2; g[206] = -2; g[207] = 3; g[208] = 4; g[209] = -10; g[210] = 0; g[211] = -8; g[212] = -7; g[213] = 7; g[214] = -1; g[215] = -3; g[216] = 2; g[217] = 2; g[218] = -4; g[219] = 9; g[220] = 1; g[221] = -2; g[222] = -3; g[223] = -6; g[224] = -5; g[225] = 0; g[226] = -7; g[227] = 2; g[228] = -3; g[229] = 2; g[230] = -1; g[231] = 7; g[232] = -1; g[233] = -1; g[234] = 2; g[235] = -5; g[236] = -1; g[237] = 1; g[238] = -2; g[239] = -1; g[240] = -6; g[241] = -6; g[242] = -7; g[243] = -2; g[244] = -6; g[245] = -2; g[246] = -5; g[247] = 2; g[248] = -2; g[249] = 3; g[250] = -2; g[251] = 4; g[252] = -5; g[253] = 1; g[254] = -3; g[255] = 4; g[256] = 2; g[257] = -2; g[258] = -4; g[259] = -6; g[260] = 2; g[261] = 1; g[262] = -2; g[263] = 1; g[264] = -1; g[265] = 5; g[266] = 0; g[267] = 9; g[268] = 2; g[269] = -7; g[270] = -1; g[271] = -6; g[272] = 4; g[273] = 2; g[274] = -8; g[275] = -10; g[276] = -4; g[277] = 1; g[278] = 4; g[279] = 6; g[280] = -5; g[281] = -5; g[282] = -1; g[283] = -1; g[284] = 1; g[285] = -6; g[286] = 3; g[287] = -7; g[288] = 2; g[289] = -2; g[290] = 3; g[291] = 3; g[292] = -4; g[293] = -1; g[294] = -1; g[295] = -1; g[296] = -6; g[297] = -3; g[298] = -6; g[299] = -2; g[300] = -1; g[301] = 7; g[302] = 4; g[303] = 1; g[304] = -4; g[305] = 10; g[306] = 6; g[307] = 1; g[308] = -6; g[309] = 2; g[310] = 0; g[311] = -6; g[312] = 3; g[313] = -2; g[314] = -8; g[315] = 8; g[316] = 8; g[317] = -3; g[318] = -1; g[319] = -1; g[320] = 0; g[321] = -2; g[322] = -2; g[323] = -4; g[324] = 3; g[325] = 1; g[326] = 1; g[327] = 0; g[328] = 0; g[329] = 4; g[330] = 1; g[331] = 7; g[332] = 0; g[333] = 2; g[334] = -7; g[335] = 0; g[336] = -3; g[337] = 8; g[338] = 1; g[339] = -1; g[340] = 4; g[341] = 7; g[342] = -1; g[343] = -2; g[344] = 3; g[345] = -6; g[346] = 5; g[347] = -7; g[348] = 5; g[349] = 2; g[350] = 5; g[351] = -4; g[352] = 4; g[353] = 3; g[354] = -2; g[355] = -4; g[356] = -1; g[357] = 4; g[358] = -1; g[359] = -3; g[360] = -4; g[361] = 2; g[362] = 2; g[363] = 8; g[364] = 7; g[365] = -3; g[366] = -2; g[367] = 2; g[368] = -1; g[369] = 1; g[370] = -5; g[371] = -11; g[372] = -2; g[373] = 5; g[374] = 3; g[375] = -3; g[376] = 0; g[377] = -3; g[378] = 0; g[379] = 0; g[380] = -1; g[381] = 0; g[382] = 0; g[383] = 1; g[384] = -3; g[385] = 0; g[386] = -2; g[387] = -2; g[388] = -5; g[389] = -4; g[390] = -2; g[391] = -1; g[392] = -6; g[393] = 1; g[394] = 4; g[395] = 4; g[396] = 1; g[397] = 2; g[398] = 4; g[399] = -2; g[400] = 2; g[401] = -1; g[402] = 3; g[403] = -3; g[404] = -1; g[405] = -4; g[406] = 2; g[407] = 11; g[408] = -8; g[409] = 0; g[410] = -5; g[411] = 2; g[412] = 2; g[413] = 3; g[414] = -2; g[415] = -3; g[416] = -1; g[417] = 1; g[418] = -5; g[419] = -1; g[420] = 3; g[421] = 6; g[422] = 11; g[423] = 0; g[424] = -4; g[425] = -1; g[426] = 0; g[427] = -3; g[428] = -4; g[429] = -5; g[430] = -1; g[431] = 1; g[432] = 1; g[433] = 1; g[434] = -4; g[435] = -1; g[436] = -7; g[437] = -1; g[438] = 3; g[439] = 0; g[440] = -6; g[441] = -1; g[442] = 3; g[443] = -4; g[444] = -1; g[445] = -2; g[446] = 0; g[447] = 1; g[448] = -5; g[449] = 2; g[450] = -6; g[451] = -1; g[452] = 2; g[453] = -8; g[454] = -1; g[455] = -5; g[456] = -1; g[457] = -5; g[458] = 0; g[459] = 3; g[460] = -2; g[461] = 4; g[462] = -2; g[463] = 2; g[464] = 8; g[465] = 2; g[466] = 2; g[467] = 8; g[468] = 6; g[469] = -1; g[470] = 1; g[471] = 4; g[472] = 0; g[473] = 1; g[474] = 10; g[475] = 3; g[476] = 3; g[477] = 5; g[478] = 1; g[479] = 0; g[480] = -4; g[481] = 0; g[482] = 1; g[483] = 3; g[484] = 9; g[485] = 4; g[486] = 8; g[487] = 2; g[488] = -3; g[489] = 0; g[490] = -1; g[491] = -4; g[492] = -3; g[493] = 4; g[494] = 1; g[495] = -4; g[496] = 2; g[497] = 2; g[498] = 4; g[499] = -5; g[500] = -3; g[501] = -6; g[502] = 0; g[503] = 1; g[504] = -3; g[505] = -3; g[506] = 1; g[507] = 0; g[508] = 4; g[509] = 2; g[510] = -1; g[511] = 2; g[512] = 0; g[513] = 0; g[514] = 0; g[515] = 0; g[516] = 0; g[517] = 0; g[518] = 0; g[519] = 0; g[520] = 0; g[521] = 0; g[522] = 0; g[523] = 0; g[524] = 0; g[525] = 0; g[526] = 0; g[527] = 0; g[528] = 0; g[529] = 0; g[530] = 0; g[531] = 0; g[532] = 0; g[533] = 0; g[534] = 0; g[535] = 0; g[536] = 0; g[537] = 0; g[538] = 0; g[539] = 0; g[540] = 0; g[541] = 0; g[542] = 0; g[543] = 0; g[544] = 0; g[545] = 0; g[546] = 0; g[547] = 0; g[548] = 0; g[549] = 0; g[550] = 0; g[551] = 0; g[552] = 0; g[553] = 0; g[554] = 0; g[555] = 0; g[556] = 0; g[557] = 0; g[558] = 0; g[559] = 0; g[560] = 0; g[561] = 0; g[562] = 0; g[563] = 0; g[564] = 0; g[565] = 0; g[566] = 0; g[567] = 0; g[568] = 0; g[569] = 0; g[570] = 0; g[571] = 0; g[572] = 0; g[573] = 0; g[574] = 0; g[575] = 0; g[576] = 0; g[577] = 0; g[578] = 0; g[579] = 0; g[580] = 0; g[581] = 0; g[582] = 0; g[583] = 0; g[584] = 0; g[585] = 0; g[586] = 0; g[587] = 0; g[588] = 0; g[589] = 0; g[590] = 0; g[591] = 0; g[592] = 0; g[593] = 0; g[594] = 0; g[595] = 0; g[596] = 0; g[597] = 0; g[598] = 0; g[599] = 0; g[600] = 0; g[601] = 0; g[602] = 0; g[603] = 0; g[604] = 0; g[605] = 0; g[606] = 0; g[607] = 0; g[608] = 0; g[609] = 0; g[610] = 0; g[611] = 0; g[612] = 0; g[613] = 0; g[614] = 0; g[615] = 0; g[616] = 0; g[617] = 0; g[618] = 0; g[619] = 0; g[620] = 0; g[621] = 0; g[622] = 0; g[623] = 0; g[624] = 0; g[625] = 0; g[626] = 0; g[627] = 0; g[628] = 0; g[629] = 0; g[630] = 0; g[631] = 0; g[632] = 0; g[633] = 0; g[634] = 0; g[635] = 0; g[636] = 0; g[637] = 0; g[638] = 0; g[639] = 0; g[640] = 0; g[641] = 0; g[642] = 0; g[643] = 0; g[644] = 0; g[645] = 0; g[646] = 0; g[647] = 0; g[648] = 0; g[649] = 0; g[650] = 0; g[651] = 0; g[652] = 0; g[653] = 0; g[654] = 0; g[655] = 0; g[656] = 0; g[657] = 0; g[658] = 0; g[659] = 0; g[660] = 0; g[661] = 0; g[662] = 0; g[663] = 0; g[664] = 0; g[665] = 0; g[666] = 0; g[667] = 0; g[668] = 0; g[669] = 0; g[670] = 0; g[671] = 0; g[672] = 0; g[673] = 0; g[674] = 0; g[675] = 0; g[676] = 0; g[677] = 0; g[678] = 0; g[679] = 0; g[680] = 0; g[681] = 0; g[682] = 0; g[683] = 0; g[684] = 0; g[685] = 0; g[686] = 0; g[687] = 0; g[688] = 0; g[689] = 0; g[690] = 0; g[691] = 0; g[692] = 0; g[693] = 0; g[694] = 0; g[695] = 0; g[696] = 0; g[697] = 0; g[698] = 0; g[699] = 0; g[700] = 0; g[701] = 0; g[702] = 0; g[703] = 0; g[704] = 0; g[705] = 0; g[706] = 0; g[707] = 0; g[708] = 0; g[709] = 0; g[710] = 0; g[711] = 0; g[712] = 0; g[713] = 0; g[714] = 0; g[715] = 0; g[716] = 0; g[717] = 0; g[718] = 0; g[719] = 0; g[720] = 0; g[721] = 0; g[722] = 0; g[723] = 0; g[724] = 0; g[725] = 0; g[726] = 0; g[727] = 0; g[728] = 0; g[729] = 0; g[730] = 0; g[731] = 0; g[732] = 0; g[733] = 0; g[734] = 0; g[735] = 0; g[736] = 0; g[737] = 0; g[738] = 0; g[739] = 0; g[740] = 0; g[741] = 0; g[742] = 0; g[743] = 0; g[744] = 0; g[745] = 0; g[746] = 0; g[747] = 0; g[748] = 0; g[749] = 0; g[750] = 0; g[751] = 0; g[752] = 0; g[753] = 0; g[754] = 0; g[755] = 0; g[756] = 0; g[757] = 0; g[758] = 0; g[759] = 0; g[760] = 0; g[761] = 0; g[762] = 0; g[763] = 0; g[764] = 0; g[765] = 0; g[766] = 0; g[767] = 0; g[768] = 0; g[769] = 0; g[770] = 0; g[771] = 0; g[772] = 0; g[773] = 0; g[774] = 0; g[775] = 0; g[776] = 0; g[777] = 0; g[778] = 0; g[779] = 0; g[780] = 0; g[781] = 0; g[782] = 0; g[783] = 0; g[784] = 0; g[785] = 0; g[786] = 0; g[787] = 0; g[788] = 0; g[789] = 0; g[790] = 0; g[791] = 0; g[792] = 0; g[793] = 0; g[794] = 0; g[795] = 0; g[796] = 0; g[797] = 0; g[798] = 0; g[799] = 0; g[800] = 0; g[801] = 0; g[802] = 0; g[803] = 0; g[804] = 0; g[805] = 0; g[806] = 0; g[807] = 0; g[808] = 0; g[809] = 0; g[810] = 0; g[811] = 0; g[812] = 0; g[813] = 0; g[814] = 0; g[815] = 0; g[816] = 0; g[817] = 0; g[818] = 0; g[819] = 0; g[820] = 0; g[821] = 0; g[822] = 0; g[823] = 0; g[824] = 0; g[825] = 0; g[826] = 0; g[827] = 0; g[828] = 0; g[829] = 0; g[830] = 0; g[831] = 0; g[832] = 0; g[833] = 0; g[834] = 0; g[835] = 0; g[836] = 0; g[837] = 0; g[838] = 0; g[839] = 0; g[840] = 0; g[841] = 0; g[842] = 0; g[843] = 0; g[844] = 0; g[845] = 0; g[846] = 0; g[847] = 0; g[848] = 0; g[849] = 0; g[850] = 0; g[851] = 0; g[852] = 0; g[853] = 0; g[854] = 0; g[855] = 0; g[856] = 0; g[857] = 0; g[858] = 0; g[859] = 0; g[860] = 0; g[861] = 0; g[862] = 0; g[863] = 0; g[864] = 0; g[865] = 0; g[866] = 0; g[867] = 0; g[868] = 0; g[869] = 0; g[870] = 0; g[871] = 0; g[872] = 0; g[873] = 0; g[874] = 0; g[875] = 0; g[876] = 0; g[877] = 0; g[878] = 0; g[879] = 0; g[880] = 0; g[881] = 0; g[882] = 0; g[883] = 0; g[884] = 0; g[885] = 0; g[886] = 0; g[887] = 0; g[888] = 0; g[889] = 0; g[890] = 0; g[891] = 0; g[892] = 0; g[893] = 0; g[894] = 0; g[895] = 0; g[896] = 0; g[897] = 0; g[898] = 0; g[899] = 0; g[900] = 0; g[901] = 0; g[902] = 0; g[903] = 0; g[904] = 0; g[905] = 0; g[906] = 0; g[907] = 0; g[908] = 0; g[909] = 0; g[910] = 0; g[911] = 0; g[912] = 0; g[913] = 0; g[914] = 0; g[915] = 0; g[916] = 0; g[917] = 0; g[918] = 0; g[919] = 0; g[920] = 0; g[921] = 0; g[922] = 0; g[923] = 0; g[924] = 0; g[925] = 0; g[926] = 0; g[927] = 0; g[928] = 0; g[929] = 0; g[930] = 0; g[931] = 0; g[932] = 0; g[933] = 0; g[934] = 0; g[935] = 0; g[936] = 0; g[937] = 0; g[938] = 0; g[939] = 0; g[940] = 0; g[941] = 0; g[942] = 0; g[943] = 0; g[944] = 0; g[945] = 0; g[946] = 0; g[947] = 0; g[948] = 0; g[949] = 0; g[950] = 0; g[951] = 0; g[952] = 0; g[953] = 0; g[954] = 0; g[955] = 0; g[956] = 0; g[957] = 0; g[958] = 0; g[959] = 0; g[960] = 0; g[961] = 0; g[962] = 0; g[963] = 0; g[964] = 0; g[965] = 0; g[966] = 0; g[967] = 0; g[968] = 0; g[969] = 0; g[970] = 0; g[971] = 0; g[972] = 0; g[973] = 0; g[974] = 0; g[975] = 0; g[976] = 0; g[977] = 0; g[978] = 0; g[979] = 0; g[980] = 0; g[981] = 0; g[982] = 0; g[983] = 0; g[984] = 0; g[985] = 0; g[986] = 0; g[987] = 0; g[988] = 0; g[989] = 0; g[990] = 0; g[991] = 0; g[992] = 0; g[993] = 0; g[994] = 0; g[995] = 0; g[996] = 0; g[997] = 0; g[998] = 0; g[999] = 0; g[1000] = 0; g[1001] = 0; g[1002] = 0; g[1003] = 0; g[1004] = 0; g[1005] = 0; g[1006] = 0; g[1007] = 0; g[1008] = 0; g[1009] = 0; g[1010] = 0; g[1011] = 0; g[1012] = 0; g[1013] = 0; g[1014] = 0; g[1015] = 0; g[1016] = 0; g[1017] = 0; g[1018] = 0; g[1019] = 0; g[1020] = 0; g[1021] = 0; g[1022] = 0; g[1023] = 0;
+
 		if (!falcon_compute_public(h, f, g, logn, ter)) {
 			continue;
 		}
+		//h[0] = 11260; h[1] = 2623; h[2] = 8180; h[3] = 9456; h[4] = 3140; h[5] = 5136; h[6] = 6879; h[7] = 5248; h[8] = 4714; h[9] = 2298; h[10] = 2815; h[11] = 3804; h[12] = 1588; h[13] = 10417; h[14] = 6704; h[15] = 9991; h[16] = 10535; h[17] = 9437; h[18] = 3480; h[19] = 7784; h[20] = 4277; h[21] = 2191; h[22] = 8294; h[23] = 382; h[24] = 2263; h[25] = 5326; h[26] = 1533; h[27] = 10263; h[28] = 3096; h[29] = 455; h[30] = 3346; h[31] = 4248; h[32] = 740; h[33] = 12007; h[34] = 12178; h[35] = 9979; h[36] = 2505; h[37] = 320; h[38] = 9854; h[39] = 8812; h[40] = 7800; h[41] = 1963; h[42] = 12057; h[43] = 3444; h[44] = 3599; h[45] = 9893; h[46] = 4735; h[47] = 2; h[48] = 3376; h[49] = 4531; h[50] = 69; h[51] = 3341; h[52] = 11960; h[53] = 10355; h[54] = 8500; h[55] = 8184; h[56] = 7863; h[57] = 6039; h[58] = 9232; h[59] = 8358; h[60] = 6780; h[61] = 5303; h[62] = 6947; h[63] = 5119; h[64] = 5314; h[65] = 5303; h[66] = 10826; h[67] = 4683; h[68] = 11149; h[69] = 4337; h[70] = 5800; h[71] = 9405; h[72] = 848; h[73] = 6624; h[74] = 3110; h[75] = 221; h[76] = 9627; h[77] = 11382; h[78] = 12025; h[79] = 11006; h[80] = 5829; h[81] = 1776; h[82] = 11106; h[83] = 5373; h[84] = 8677; h[85] = 2392; h[86] = 7217; h[87] = 10578; h[88] = 11240; h[89] = 7152; h[90] = 11199; h[91] = 3847; h[92] = 862; h[93] = 10366; h[94] = 4177; h[95] = 11833; h[96] = 3408; h[97] = 5920; h[98] = 2285; h[99] = 8603; h[100] = 8071; h[101] = 12037; h[102] = 292; h[103] = 9650; h[104] = 657; h[105] = 932; h[106] = 5847; h[107] = 7183; h[108] = 9156; h[109] = 8130; h[110] = 7136; h[111] = 7126; h[112] = 12167; h[113] = 10026; h[114] = 10451; h[115] = 10429; h[116] = 209; h[117] = 410; h[118] = 4826; h[119] = 851; h[120] = 10507; h[121] = 10199; h[122] = 10018; h[123] = 8961; h[124] = 2513; h[125] = 1642; h[126] = 3350; h[127] = 4633; h[128] = 112; h[129] = 3244; h[130] = 10367; h[131] = 6365; h[132] = 9438; h[133] = 5000; h[134] = 1154; h[135] = 1897; h[136] = 5922; h[137] = 2671; h[138] = 5713; h[139] = 871; h[140] = 4271; h[141] = 8256; h[142] = 4331; h[143] = 1845; h[144] = 639; h[145] = 8334; h[146] = 12169; h[147] = 6787; h[148] = 1365; h[149] = 11661; h[150] = 4391; h[151] = 3939; h[152] = 4543; h[153] = 8764; h[154] = 5200; h[155] = 4581; h[156] = 11350; h[157] = 1966; h[158] = 3538; h[159] = 7590; h[160] = 3964; h[161] = 9531; h[162] = 10692; h[163] = 9801; h[164] = 12149; h[165] = 5033; h[166] = 792; h[167] = 6683; h[168] = 1580; h[169] = 3701; h[170] = 2459; h[171] = 5711; h[172] = 440; h[173] = 6712; h[174] = 192; h[175] = 11707; h[176] = 5033; h[177] = 6795; h[178] = 3642; h[179] = 10348; h[180] = 2062; h[181] = 3936; h[182] = 10626; h[183] = 8328; h[184] = 5894; h[185] = 11857; h[186] = 2476; h[187] = 9557; h[188] = 10418; h[189] = 11459; h[190] = 12263; h[191] = 10286; h[192] = 5455; h[193] = 4719; h[194] = 11845; h[195] = 11453; h[196] = 11978; h[197] = 6965; h[198] = 171; h[199] = 6808; h[200] = 4477; h[201] = 8632; h[202] = 3468; h[203] = 4814; h[204] = 9158; h[205] = 7295; h[206] = 3727; h[207] = 8263; h[208] = 2; h[209] = 11841; h[210] = 9212; h[211] = 4157; h[212] = 7162; h[213] = 3546; h[214] = 11489; h[215] = 6092; h[216] = 765; h[217] = 11025; h[218] = 1777; h[219] = 2943; h[220] = 7108; h[221] = 12260; h[222] = 7919; h[223] = 11529; h[224] = 788; h[225] = 894; h[226] = 6990; h[227] = 11426; h[228] = 5182; h[229] = 5185; h[230] = 265; h[231] = 9659; h[232] = 9096; h[233] = 4252; h[234] = 1512; h[235] = 12; h[236] = 3182; h[237] = 2612; h[238] = 9570; h[239] = 10957; h[240] = 1148; h[241] = 9251; h[242] = 10191; h[243] = 9552; h[244] = 8278; h[245] = 11326; h[246] = 8078; h[247] = 8691; h[248] = 1860; h[249] = 10983; h[250] = 5888; h[251] = 1446; h[252] = 8082; h[253] = 10100; h[254] = 1555; h[255] = 11634; h[256] = 7585; h[257] = 278; h[258] = 7006; h[259] = 1996; h[260] = 325; h[261] = 5774; h[262] = 9090; h[263] = 6857; h[264] = 2788; h[265] = 8468; h[266] = 9628; h[267] = 6151; h[268] = 235; h[269] = 1117; h[270] = 3640; h[271] = 8321; h[272] = 8849; h[273] = 5592; h[274] = 4127; h[275] = 10862; h[276] = 2021; h[277] = 6108; h[278] = 6905; h[279] = 1759; h[280] = 7672; h[281] = 1099; h[282] = 189; h[283] = 6470; h[284] = 8666; h[285] = 6646; h[286] = 9055; h[287] = 9354; h[288] = 5141; h[289] = 1177; h[290] = 5479; h[291] = 6302; h[292] = 10508; h[293] = 1090; h[294] = 1491; h[295] = 5118; h[296] = 6156; h[297] = 10432; h[298] = 8279; h[299] = 11138; h[300] = 55; h[301] = 3236; h[302] = 6499; h[303] = 496; h[304] = 9156; h[305] = 6384; h[306] = 10037; h[307] = 1572; h[308] = 5251; h[309] = 6221; h[310] = 7133; h[311] = 7409; h[312] = 6879; h[313] = 9879; h[314] = 3124; h[315] = 3968; h[316] = 10107; h[317] = 2392; h[318] = 12158; h[319] = 5893; h[320] = 8760; h[321] = 3941; h[322] = 8955; h[323] = 11550; h[324] = 5943; h[325] = 11476; h[326] = 873; h[327] = 9178; h[328] = 9205; h[329] = 1958; h[330] = 3774; h[331] = 4926; h[332] = 3752; h[333] = 10516; h[334] = 398; h[335] = 8014; h[336] = 4649; h[337] = 7764; h[338] = 6245; h[339] = 1502; h[340] = 10742; h[341] = 6154; h[342] = 4164; h[343] = 7053; h[344] = 5575; h[345] = 4623; h[346] = 6790; h[347] = 7662; h[348] = 7949; h[349] = 1735; h[350] = 2157; h[351] = 4611; h[352] = 3576; h[353] = 235; h[354] = 3900; h[355] = 5720; h[356] = 6970; h[357] = 8684; h[358] = 2277; h[359] = 1694; h[360] = 8709; h[361] = 7734; h[362] = 3601; h[363] = 11045; h[364] = 9042; h[365] = 5839; h[366] = 2494; h[367] = 3978; h[368] = 4182; h[369] = 5216; h[370] = 1119; h[371] = 10282; h[372] = 11698; h[373] = 5330; h[374] = 10327; h[375] = 12195; h[376] = 883; h[377] = 726; h[378] = 6703; h[379] = 779; h[380] = 479; h[381] = 9970; h[382] = 1124; h[383] = 884; h[384] = 655; h[385] = 4486; h[386] = 1242; h[387] = 7967; h[388] = 1652; h[389] = 10633; h[390] = 11497; h[391] = 869; h[392] = 1638; h[393] = 9946; h[394] = 9409; h[395] = 6713; h[396] = 7684; h[397] = 7972; h[398] = 9038; h[399] = 5377; h[400] = 3340; h[401] = 859; h[402] = 4428; h[403] = 934; h[404] = 49; h[405] = 3692; h[406] = 10358; h[407] = 11413; h[408] = 4903; h[409] = 9326; h[410] = 4705; h[411] = 429; h[412] = 10971; h[413] = 6405; h[414] = 8278; h[415] = 11019; h[416] = 4699; h[417] = 5739; h[418] = 11970; h[419] = 4261; h[420] = 8149; h[421] = 7152; h[422] = 500; h[423] = 8048; h[424] = 6895; h[425] = 5906; h[426] = 8978; h[427] = 1363; h[428] = 9958; h[429] = 9322; h[430] = 232; h[431] = 7088; h[432] = 4571; h[433] = 3137; h[434] = 11127; h[435] = 11821; h[436] = 2361; h[437] = 11178; h[438] = 862; h[439] = 3161; h[440] = 6887; h[441] = 2977; h[442] = 77; h[443] = 7486; h[444] = 10486; h[445] = 11263; h[446] = 3936; h[447] = 7381; h[448] = 12114; h[449] = 196; h[450] = 11542; h[451] = 8089; h[452] = 5911; h[453] = 11650; h[454] = 5018; h[455] = 8147; h[456] = 4062; h[457] = 3709; h[458] = 3526; h[459] = 1610; h[460] = 7207; h[461] = 6023; h[462] = 9165; h[463] = 9250; h[464] = 1409; h[465] = 11440; h[466] = 2559; h[467] = 3357; h[468] = 9148; h[469] = 5390; h[470] = 10836; h[471] = 6662; h[472] = 1211; h[473] = 4584; h[474] = 5804; h[475] = 3958; h[476] = 8565; h[477] = 7640; h[478] = 7560; h[479] = 10384; h[480] = 10839; h[481] = 7183; h[482] = 11120; h[483] = 869; h[484] = 10336; h[485] = 1841; h[486] = 6437; h[487] = 10762; h[488] = 10120; h[489] = 10439; h[490] = 12010; h[491] = 5856; h[492] = 7797; h[493] = 4997; h[494] = 8150; h[495] = 2568; h[496] = 1762; h[497] = 175; h[498] = 215; h[499] = 4747; h[500] = 7750; h[501] = 2559; h[502] = 681; h[503] = 6482; h[504] = 9507; h[505] = 1054; h[506] = 1877; h[507] = 7634; h[508] = 9527; h[509] = 8622; h[510] = 7006; h[511] = 1131; h[512] = 0; h[513] = 0; h[514] = 0; h[515] = 0; h[516] = 0; h[517] = 0; h[518] = 0; h[519] = 0; h[520] = 0; h[521] = 0; h[522] = 0; h[523] = 0; h[524] = 0; h[525] = 0; h[526] = 0; h[527] = 0; h[528] = 0; h[529] = 0; h[530] = 0; h[531] = 0; h[532] = 0; h[533] = 0; h[534] = 0; h[535] = 0; h[536] = 0; h[537] = 0; h[538] = 0; h[539] = 0; h[540] = 0; h[541] = 0; h[542] = 0; h[543] = 0; h[544] = 0; h[545] = 0; h[546] = 0; h[547] = 0; h[548] = 0; h[549] = 0; h[550] = 0; h[551] = 0; h[552] = 0; h[553] = 0; h[554] = 0; h[555] = 0; h[556] = 0; h[557] = 0; h[558] = 0; h[559] = 0; h[560] = 0; h[561] = 0; h[562] = 0; h[563] = 0; h[564] = 0; h[565] = 0; h[566] = 0; h[567] = 0; h[568] = 0; h[569] = 0; h[570] = 0; h[571] = 0; h[572] = 0; h[573] = 0; h[574] = 0; h[575] = 0; h[576] = 0; h[577] = 0; h[578] = 0; h[579] = 0; h[580] = 0; h[581] = 0; h[582] = 0; h[583] = 0; h[584] = 0; h[585] = 0; h[586] = 0; h[587] = 0; h[588] = 0; h[589] = 0; h[590] = 0; h[591] = 0; h[592] = 0; h[593] = 0; h[594] = 0; h[595] = 0; h[596] = 0; h[597] = 0; h[598] = 0; h[599] = 0; h[600] = 0; h[601] = 0; h[602] = 0; h[603] = 0; h[604] = 0; h[605] = 0; h[606] = 0; h[607] = 0; h[608] = 0; h[609] = 0; h[610] = 0; h[611] = 0; h[612] = 0; h[613] = 0; h[614] = 0; h[615] = 0; h[616] = 0; h[617] = 0; h[618] = 0; h[619] = 0; h[620] = 0; h[621] = 0; h[622] = 0; h[623] = 0; h[624] = 0; h[625] = 0; h[626] = 0; h[627] = 0; h[628] = 0; h[629] = 0; h[630] = 0; h[631] = 0; h[632] = 0; h[633] = 0; h[634] = 0; h[635] = 0; h[636] = 0; h[637] = 0; h[638] = 0; h[639] = 0; h[640] = 0; h[641] = 0; h[642] = 0; h[643] = 0; h[644] = 0; h[645] = 0; h[646] = 0; h[647] = 0; h[648] = 0; h[649] = 0; h[650] = 0; h[651] = 0; h[652] = 0; h[653] = 0; h[654] = 0; h[655] = 0; h[656] = 0; h[657] = 0; h[658] = 0; h[659] = 0; h[660] = 0; h[661] = 0; h[662] = 0; h[663] = 0; h[664] = 0; h[665] = 0; h[666] = 0; h[667] = 0; h[668] = 0; h[669] = 0; h[670] = 0; h[671] = 0; h[672] = 0; h[673] = 0; h[674] = 0; h[675] = 0; h[676] = 0; h[677] = 0; h[678] = 0; h[679] = 0; h[680] = 0; h[681] = 0; h[682] = 0; h[683] = 0; h[684] = 0; h[685] = 0; h[686] = 0; h[687] = 0; h[688] = 0; h[689] = 0; h[690] = 0; h[691] = 0; h[692] = 0; h[693] = 0; h[694] = 0; h[695] = 0; h[696] = 0; h[697] = 0; h[698] = 0; h[699] = 0; h[700] = 0; h[701] = 0; h[702] = 0; h[703] = 0; h[704] = 0; h[705] = 0; h[706] = 0; h[707] = 0; h[708] = 0; h[709] = 0; h[710] = 0; h[711] = 0; h[712] = 0; h[713] = 0; h[714] = 0; h[715] = 0; h[716] = 0; h[717] = 0; h[718] = 0; h[719] = 0; h[720] = 0; h[721] = 0; h[722] = 0; h[723] = 0; h[724] = 0; h[725] = 0; h[726] = 0; h[727] = 0; h[728] = 0; h[729] = 0; h[730] = 0; h[731] = 0; h[732] = 0; h[733] = 0; h[734] = 0; h[735] = 0; h[736] = 0; h[737] = 0; h[738] = 0; h[739] = 0; h[740] = 0; h[741] = 0; h[742] = 0; h[743] = 0; h[744] = 0; h[745] = 0; h[746] = 0; h[747] = 0; h[748] = 0; h[749] = 0; h[750] = 0; h[751] = 0; h[752] = 0; h[753] = 0; h[754] = 0; h[755] = 0; h[756] = 0; h[757] = 0; h[758] = 0; h[759] = 0; h[760] = 0; h[761] = 0; h[762] = 0; h[763] = 0; h[764] = 0; h[765] = 0; h[766] = 0; h[767] = 0; h[768] = 0; h[769] = 0; h[770] = 0; h[771] = 0; h[772] = 0; h[773] = 0; h[774] = 0; h[775] = 0; h[776] = 0; h[777] = 0; h[778] = 0; h[779] = 0; h[780] = 0; h[781] = 0; h[782] = 0; h[783] = 0; h[784] = 0; h[785] = 0; h[786] = 0; h[787] = 0; h[788] = 0; h[789] = 0; h[790] = 0; h[791] = 0; h[792] = 0; h[793] = 0; h[794] = 0; h[795] = 0; h[796] = 0; h[797] = 0; h[798] = 0; h[799] = 0; h[800] = 0; h[801] = 0; h[802] = 0; h[803] = 0; h[804] = 0; h[805] = 0; h[806] = 0; h[807] = 0; h[808] = 0; h[809] = 0; h[810] = 0; h[811] = 0; h[812] = 0; h[813] = 0; h[814] = 0; h[815] = 0; h[816] = 0; h[817] = 0; h[818] = 0; h[819] = 0; h[820] = 0; h[821] = 0; h[822] = 0; h[823] = 0; h[824] = 0; h[825] = 0; h[826] = 0; h[827] = 0; h[828] = 0; h[829] = 0; h[830] = 0; h[831] = 0; h[832] = 0; h[833] = 0; h[834] = 0; h[835] = 0; h[836] = 0; h[837] = 0; h[838] = 0; h[839] = 0; h[840] = 0; h[841] = 0; h[842] = 0; h[843] = 0; h[844] = 0; h[845] = 0; h[846] = 0; h[847] = 0; h[848] = 0; h[849] = 0; h[850] = 0; h[851] = 0; h[852] = 0; h[853] = 0; h[854] = 0; h[855] = 0; h[856] = 0; h[857] = 0; h[858] = 0; h[859] = 0; h[860] = 0; h[861] = 0; h[862] = 0; h[863] = 0; h[864] = 0; h[865] = 0; h[866] = 0; h[867] = 0; h[868] = 0; h[869] = 0; h[870] = 0; h[871] = 0; h[872] = 0; h[873] = 0; h[874] = 0; h[875] = 0; h[876] = 0; h[877] = 0; h[878] = 0; h[879] = 0; h[880] = 0; h[881] = 0; h[882] = 0; h[883] = 0; h[884] = 0; h[885] = 0; h[886] = 0; h[887] = 0; h[888] = 0; h[889] = 0; h[890] = 0; h[891] = 0; h[892] = 0; h[893] = 0; h[894] = 0; h[895] = 0; h[896] = 0; h[897] = 0; h[898] = 0; h[899] = 0; h[900] = 0; h[901] = 0; h[902] = 0; h[903] = 0; h[904] = 0; h[905] = 0; h[906] = 0; h[907] = 0; h[908] = 0; h[909] = 0; h[910] = 0; h[911] = 0; h[912] = 0; h[913] = 0; h[914] = 0; h[915] = 0; h[916] = 0; h[917] = 0; h[918] = 0; h[919] = 0; h[920] = 0; h[921] = 0; h[922] = 0; h[923] = 0; h[924] = 0; h[925] = 0; h[926] = 0; h[927] = 0; h[928] = 0; h[929] = 0; h[930] = 0; h[931] = 0; h[932] = 0; h[933] = 0; h[934] = 0; h[935] = 0; h[936] = 0; h[937] = 0; h[938] = 0; h[939] = 0; h[940] = 0; h[941] = 0; h[942] = 0; h[943] = 0; h[944] = 0; h[945] = 0; h[946] = 0; h[947] = 0; h[948] = 0; h[949] = 0; h[950] = 0; h[951] = 0; h[952] = 0; h[953] = 0; h[954] = 0; h[955] = 0; h[956] = 0; h[957] = 0; h[958] = 0; h[959] = 0; h[960] = 0; h[961] = 0; h[962] = 0; h[963] = 0; h[964] = 0; h[965] = 0; h[966] = 0; h[967] = 0; h[968] = 0; h[969] = 0; h[970] = 0; h[971] = 0; h[972] = 0; h[973] = 0; h[974] = 0; h[975] = 0; h[976] = 0; h[977] = 0; h[978] = 0; h[979] = 0; h[980] = 0; h[981] = 0; h[982] = 0; h[983] = 0; h[984] = 0; h[985] = 0; h[986] = 0; h[987] = 0; h[988] = 0; h[989] = 0; h[990] = 0; h[991] = 0; h[992] = 0; h[993] = 0; h[994] = 0; h[995] = 0; h[996] = 0; h[997] = 0; h[998] = 0; h[999] = 0; h[1000] = 0; h[1001] = 0; h[1002] = 0; h[1003] = 0; h[1004] = 0; h[1005] = 0; h[1006] = 0; h[1007] = 0; h[1008] = 0; h[1009] = 0; h[1010] = 0; h[1011] = 0; h[1012] = 0; h[1013] = 0; h[1014] = 0; h[1015] = 0; h[1016] = 0; h[1017] = 0; h[1018] = 0; h[1019] = 0; h[1020] = 0; h[1021] = 0; h[1022] = 0; h[1023] = 0;
 
-		/*
-		 * Solve the NTRU equation to get F and G.
-		 */
+//		for(loop2=0;loop2<1024;loop2++)
+//			printf("h[%d] = %d; ",loop2,h[loop2]);
+//
+//		/*
+//		 * Solve the NTRU equation to get F and G.
+//		 */
 		if (!solve_NTRU(fk, F, G, f, g)) {
 			continue;
 		}
@@ -6460,20 +6798,46 @@ falcon_keygen_make(falcon_keygen *fk, int comp,
 	}
 	skbuf[0] = (ter << 7) + (comp << 5) + logn;
 	skoff = 1;
-	ske[0] = f;
-	ske[1] = g;
-	ske[2] = F;
-	ske[3] = G;
-	for (i = 0; i < 4; i ++) {
-		size_t elen;
-
-		elen = falcon_encode_small(skbuf + skoff, klen - skoff,
-			comp, ter ? 18433 : 12289, ske[i], logn);
-		if (elen == 0) {
-			return 0;
-		}
-		skoff += elen;
+//	ske[0] = f;
+//	ske[1] = g;
+//	ske[2] = F;
+//	ske[3] = G;
+//	for (i = 0; i < 4; i ++) {
+//		size_t elen;
+//
+//		elen = falcon_encode_small(skbuf + skoff, klen - skoff,
+//			comp, ter ? 18433 : 12289, ske[i], logn);
+//		if (elen == 0) {
+//			return 0;
+//		}
+//		skoff += elen;
+//	}
+	elen = falcon_encode_small(skbuf + skoff, klen - skoff,
+		comp, ter ? 18433 : 12289, f, logn);
+	if (elen == 0) {
+		return 0;
 	}
+	skoff += elen;
+	elen = falcon_encode_small(skbuf + skoff, klen - skoff,
+		comp, ter ? 18433 : 12289, g, logn);
+	if (elen == 0) {
+		return 0;
+	}
+	skoff += elen;
+	elen = falcon_encode_small(skbuf + skoff, klen - skoff,
+		comp, ter ? 18433 : 12289, F, logn);
+	if (elen == 0) {
+		return 0;
+	}
+	skoff += elen;
+	elen = falcon_encode_small(skbuf + skoff, klen - skoff,
+		comp, ter ? 18433 : 12289, G, logn);
+	if (elen == 0) {
+		return 0;
+	}
+	skoff += elen;
+
+
 	*privkey_len = skoff;
 
 	/*

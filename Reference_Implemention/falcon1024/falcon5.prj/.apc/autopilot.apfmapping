@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<autopilotfilemapping:AutoPilotFileMapping xmlns:autopilotfilemapping="www.autoesl.com/autopilotfilemapping">
+  <source>
+    <originFiles name="shake.c" path="/home/dss545/vivado_hls/Falcon-Round2/Reference_Implemention/falcon1024/shake.c"/>
+    <originFiles name="rng.c" path="/home/dss545/vivado_hls/Falcon-Round2/Reference_Implemention/falcon1024/rng.c"/>
+    <originFiles name="nist.c" path="/home/dss545/vivado_hls/Falcon-Round2/Reference_Implemention/falcon1024/nist.c"/>
+    <originFiles name="frng.c" path="/home/dss545/vivado_hls/Falcon-Round2/Reference_Implemention/falcon1024/frng.c"/>
+    <originFiles name="falcon-vrfy.c" path="/home/dss545/vivado_hls/Falcon-Round2/Reference_Implemention/falcon1024/falcon-vrfy.c"/>
+    <originFiles name="falcon-keygen.c" path="/home/dss545/vivado_hls/Falcon-Round2/Reference_Implemention/falcon1024/falcon-keygen.c"/>
+    <originFiles name="falcon-fft.c" path="/home/dss545/vivado_hls/Falcon-Round2/Reference_Implemention/falcon1024/falcon-fft.c"/>
+    <originFiles name="falcon-enc.c" path="/home/dss545/vivado_hls/Falcon-Round2/Reference_Implemention/falcon1024/falcon-enc.c"/>
+    <originFiles name="aes.c" path="/home/dss545/vivado_hls/Falcon-Round2/Reference_Implemention/falcon1024/aes.c"/>
+  </source>
+  <testbench>
+    <originFiles name="newtest_sign.c" path="/home/dss545/vivado_hls/Falcon-Round2/Reference_Implemention/falcon1024/newtest_sign.c"/>
+  </testbench>
+</autopilotfilemapping:AutoPilotFileMapping>

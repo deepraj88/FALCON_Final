@@ -32,6 +32,8 @@
 #include <stddef.h>
 #include "internal.h"
 
+#define DEBUG
+
 /*
  * If CLEANSE is non-zero, then temporary areas obtained with malloc()
  * and used to contain secret values are explicitly cleared before
@@ -1657,7 +1659,7 @@ static const uint16_t REV10[] = {
  * p must be a prime such that p = 1 mod 2048.
  */
 static void
-modp_mkgm2(uint32_t *restrict gm, uint32_t *restrict igm, unsigned logn,
+modp_mkgm2(uint32_t *gm, uint32_t *igm, unsigned logn,
 	uint32_t g, uint32_t p, uint32_t p0i)
 {
 	size_t u, n;
@@ -1822,7 +1824,7 @@ modp_iNTT2_ext(uint32_t *a, size_t stride, const uint32_t *igm, unsigned logn,
  * are the prefixes of the table for the full case for logn+1.
  */
 static void
-modp_mkgm3(uint32_t *restrict gm, uint32_t *restrict igm,
+modp_mkgm3(uint32_t *gm, uint32_t *igm,
 	unsigned logn, unsigned full,
 	uint32_t g, uint32_t p, uint32_t p0i)
 {
@@ -2205,7 +2207,7 @@ modp_poly_rec_res(uint32_t *f, unsigned logn,
  * is returned. Source arrays a and b MUST be distinct.
  */
 static uint32_t
-zint_add(uint32_t *restrict a, const uint32_t *restrict b, size_t len)
+zint_add(uint32_t *a, const uint32_t *b, size_t len)
 {
 	size_t u;
 	uint32_t cc;
@@ -2227,7 +2229,7 @@ zint_add(uint32_t *restrict a, const uint32_t *restrict b, size_t len)
  * MUST be distinct.
  */
 static uint32_t
-zint_sub(uint32_t *restrict a, const uint32_t *restrict b, size_t len)
+zint_sub(uint32_t *a, const uint32_t *b, size_t len)
 {
 	size_t u;
 	uint32_t cc;
@@ -2322,8 +2324,8 @@ zint_mod_small_signed(const uint32_t *d, size_t dlen,
  * has length 'len+1' words. 's' must fit on 31 bits.
  */
 static void
-zint_add_mul_small(uint32_t *restrict x,
-	const uint32_t *restrict y, size_t len, uint32_t s)
+zint_add_mul_small(uint32_t *x,
+	const uint32_t *y, size_t len, uint32_t s)
 {
 	size_t u;
 	uint32_t cc;
@@ -2368,7 +2370,7 @@ zint_rshift1(uint32_t *d, size_t len)
  * Halve integer x modulo integer p. The modulus p MUST be odd.
  */
 static void
-zint_rshift1_mod(uint32_t *restrict x, const uint32_t *restrict p, size_t len)
+zint_rshift1_mod(uint32_t *x, const uint32_t *p, size_t len)
 {
 	uint32_t hi;
 
@@ -2385,8 +2387,8 @@ zint_rshift1_mod(uint32_t *restrict x, const uint32_t *restrict p, size_t len)
  * Subtract y from x, modulo p.
  */
 static void
-zint_sub_mod(uint32_t *restrict x, const uint32_t *restrict y,
-	const uint32_t *restrict p, size_t len)
+zint_sub_mod(uint32_t *x, const uint32_t *y,
+	const uint32_t *p, size_t len)
 {
 	if (zint_sub(x, y, len)) {
 		zint_add(x, p, len);
@@ -2421,7 +2423,7 @@ zint_ucmp(const uint32_t *a, const uint32_t *b, size_t len)
  * untouched. The two integers x and p are encoded over the same length.
  */
 static void
-zint_norm_zero(uint32_t *restrict x, const uint32_t *restrict p, size_t len)
+zint_norm_zero(uint32_t *x, const uint32_t *p, size_t len)
 {
 	uint32_t cc;
 	size_t u;
@@ -2458,9 +2460,9 @@ zint_norm_zero(uint32_t *restrict x, const uint32_t *restrict p, size_t len)
  * small prime moduli); two's complement is used for negative values.
  */
 static void
-zint_rebuild_CRT(uint32_t *restrict xx, size_t xlen, size_t xstride,
+zint_rebuild_CRT(uint32_t *xx, size_t xlen, size_t xstride,
 	size_t num, const small_prime *primes, int normalize_signed,
-	uint32_t *restrict tmp)
+	uint32_t *tmp)
 {
 	size_t u;
 	uint32_t *x;
@@ -2786,9 +2788,9 @@ zint_reduce_mod(uint32_t *a, const uint32_t *b, const uint32_t *m,
  * each other, or with either x or y.
  */
 static int
-zint_bezout(uint32_t *restrict u, uint32_t *restrict v,
-	const uint32_t *restrict x, const uint32_t *restrict y,
-	size_t len, uint32_t *restrict tmp)
+zint_bezout(uint32_t *u, uint32_t *v,
+	const uint32_t *x, const uint32_t *y,
+	size_t len, uint32_t *tmp)
 {
 	uint32_t *u0, *u1, *v0, *v1, *a, *b;
 	size_t xlen, ylen, alen, blen, mlen;
@@ -3215,8 +3217,8 @@ zint_get_top(const uint32_t *x, size_t xlen, uint32_t sc)
  * negative values.
  */
 static void
-zint_add_scaled_mul_small(uint32_t *restrict x, size_t xlen,
-	const uint32_t *restrict y, size_t ylen, int32_t k,
+zint_add_scaled_mul_small(uint32_t *x, size_t xlen,
+	const uint32_t *y, size_t ylen, int32_t k,
 	uint32_t sch, uint32_t scl)
 {
 	size_t u;
@@ -3276,8 +3278,8 @@ zint_add_scaled_mul_small(uint32_t *restrict x, size_t xlen,
  * negative values.
  */
 static void
-zint_sub_scaled(uint32_t *restrict x, size_t xlen,
-	const uint32_t *restrict y, size_t ylen, uint32_t sch, uint32_t scl)
+zint_sub_scaled(uint32_t *x, size_t xlen,
+	const uint32_t *y, size_t ylen, uint32_t sch, uint32_t scl)
 {
 	size_t u;
 	uint32_t ysign, tw;
@@ -3401,9 +3403,9 @@ poly_big_to_small(int16_t *d, const uint32_t *s, unsigned logn, unsigned ter)
  * high degree.
  */
 static void
-poly_sub_scaled(uint32_t *restrict F, size_t Flen, size_t Fstride,
-	const uint32_t *restrict f, size_t flen, size_t fstride,
-	const int32_t *restrict k, uint32_t sc,
+poly_sub_scaled(uint32_t *F, size_t Flen, size_t Fstride,
+	const uint32_t *f, size_t flen, size_t fstride,
+	const int32_t *k, uint32_t sc,
 	unsigned logn, unsigned full, unsigned ternary)
 {
 	size_t n, hn, u;
@@ -3477,10 +3479,10 @@ poly_sub_scaled(uint32_t *restrict F, size_t Flen, size_t Fstride,
  * assumes that the degree is large, and integers relatively small.
  */
 static void
-poly_sub_scaled_ntt(uint32_t *restrict F, size_t Flen, size_t Fstride,
-	const uint32_t *restrict f, size_t flen, size_t fstride,
-	const int32_t *restrict k, uint32_t sc,
-	unsigned logn, unsigned full, int ternary, uint32_t *restrict tmp)
+poly_sub_scaled_ntt(uint32_t *F, size_t Flen, size_t Fstride,
+	const uint32_t *f, size_t flen, size_t fstride,
+	const int32_t *k, uint32_t sc,
+	unsigned logn, unsigned full, int ternary, uint32_t *tmp)
 {
 	uint32_t *gm, *igm, *fk, *t1, *x;
 	const uint32_t *y;
@@ -3599,10 +3601,25 @@ get_rng_u64(shake_context *rng)
 	 * On other systems we enforce little-endian representation.
 	 */
 #if FALCON_LE_U
+#ifndef DEBUG1
+	unsigned char tmp[8];
+
+	shake_extract(rng, tmp, sizeof tmp);
+	return (uint64_t)tmp[0]
+		| ((uint64_t)tmp[1] << 8)
+		| ((uint64_t)tmp[2] << 16)
+		| ((uint64_t)tmp[3] << 24)
+		| ((uint64_t)tmp[4] << 32)
+		| ((uint64_t)tmp[5] << 40)
+		| ((uint64_t)tmp[6] << 48)
+		| ((uint64_t)tmp[7] << 56);
+#else
+
 	uint64_t r;
 
-	shake_extract(rng, &r, sizeof r);
+	shake_extract(rng, &r, sizeof r); //Hex:0x84ac8b2051eb9013, 0xc59f66c6b242dc11
 	return r;
+#endif
 #else
 	unsigned char tmp[8];
 

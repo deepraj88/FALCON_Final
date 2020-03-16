@@ -322,7 +322,7 @@ void falcon_iFFT(fpr *f, unsigned logn);
  * Add polynomial b to polynomial a. a and b MUST NOT overlap. This
  * function works in normal representation.
  */
-void falcon_poly_add(fpr *restrict a, const fpr *restrict b, unsigned logn);
+void falcon_poly_add(fpr * a, const fpr * b, unsigned logn);
 
 /*
  * Add polynomial b to polynomial a. a and b MUST NOT overlap. This
@@ -346,7 +346,7 @@ void falcon_poly_addconst_fft(fpr *a, fpr x, unsigned logn);
  * Subtract polynomial b from polynomial a. a and b MUST NOT overlap. This
  * function works in normal representation.
  */
-void falcon_poly_sub(fpr *restrict a, const fpr *restrict b, unsigned logn);
+void falcon_poly_sub(fpr * a, const fpr * b, unsigned logn);
 
 /*
  * Subtract polynomial b from polynomial a. a and b MUST NOT overlap. This
@@ -379,20 +379,20 @@ void falcon_poly_adj_fft(fpr *a, unsigned logn);
  * We do not define falcon_poly_mul() because implementation must use
  * extra temporary storage.
  *
-void falcon_poly_mul(fpr *restrict a, const fpr *restrict b, unsigned logn);
+void falcon_poly_mul(fpr * a, const fpr * b, unsigned logn);
  */
 
 /*
  * Multiply polynomial a with polynomial b. a and b MUST NOT overlap.
  * This function works in FFT representation.
  */
-void falcon_poly_mul_fft(fpr *restrict a, const fpr *restrict b, unsigned logn);
+void falcon_poly_mul_fft(fpr * a, const fpr * b, unsigned logn);
 
 /*
  * We do not define falcon_poly_sqr() because implementation must use
  * extra temporary storage.
  *
-void falcon_poly_sqr(fpr *restrict a, const fpr *restrict b, unsigned logn);
+void falcon_poly_sqr(fpr * a, const fpr * b, unsigned logn);
  */
 
 /*
@@ -404,8 +404,8 @@ void falcon_poly_sqr_fft(fpr *a, unsigned logn);
  * Multiply polynomial a with the adjoint of polynomial b. a and b MUST NOT
  * overlap. This function works in FFT representation.
  */
-void falcon_poly_muladj_fft(fpr *restrict a,
-	const fpr *restrict b, unsigned logn);
+void falcon_poly_muladj_fft(fpr * a,
+	const fpr * b, unsigned logn);
 
 /*
  * Multiply polynomial with its own adjoint. This function works in FFT
@@ -434,14 +434,14 @@ void falcon_poly_inv_fft(fpr *a, unsigned logn);
  * Divide polynomial a by polynomial b, modulo X^N+1 (FFT representation).
  * a and b MUST NOT overlap.
  */
-void falcon_poly_div_fft(fpr *restrict a, const fpr *restrict b, unsigned logn);
+void falcon_poly_div_fft(fpr * a, const fpr * b, unsigned logn);
 
 /*
  * Divide polynomial a by polynomial adj(b), modulo X^N+1 (FFT
  * representation). a and b MUST NOT overlap.
  */
-void falcon_poly_divadj_fft(fpr *restrict a,
-	const fpr *restrict b, unsigned logn);
+void falcon_poly_divadj_fft(fpr * a,
+	const fpr * b, unsigned logn);
 
 /*
  * Given f and g (in FFT representation), compute 1/(f*adj(f)+g*adj(g))
@@ -451,17 +451,17 @@ void falcon_poly_divadj_fft(fpr *restrict a,
  *
  * Array d MUST NOT overlap with either a or b.
  */
-void falcon_poly_invnorm2_fft(fpr *restrict d,
-	const fpr *restrict a, const fpr *restrict b, unsigned logn);
+void falcon_poly_invnorm2_fft(fpr * d,
+	const fpr * a, fpr * b, unsigned logn);
 
 /*
  * Given F, G, f and g (in FFT representation), compute F*adj(f)+G*adj(g)
  * (also in FFT representation). Destination d MUST NOT overlap with
  * any of the source arrays.
  */
-void falcon_poly_add_muladj_fft(fpr *restrict d,
-	const fpr *restrict F, const fpr *restrict G,
-	const fpr *restrict f, const fpr *restrict g, unsigned logn);
+void falcon_poly_add_muladj_fft(fpr * d,
+	const fpr * F, const fpr * G,
+	const fpr * f, const fpr * g, unsigned logn);
 
 /*
  * Multiply polynomial a by polynomial b, where b is autoadjoint. Both
@@ -469,8 +469,8 @@ void falcon_poly_add_muladj_fft(fpr *restrict d,
  * FFT coefficients are real, and the array b contains only N/2 elements.
  * a and b MUST NOT overlap.
  */
-void falcon_poly_mul_autoadj_fft(fpr *restrict a,
-	const fpr *restrict b, unsigned logn);
+void falcon_poly_mul_autoadj_fft(fpr * a,
+	const fpr * b, unsigned logn);
 
 /*
  * Divide polynomial a by polynomial b, where b is autoadjoint. Both
@@ -478,16 +478,16 @@ void falcon_poly_mul_autoadj_fft(fpr *restrict a,
  * FFT coefficients are real, and the array b contains only N/2 elements.
  * a and b MUST NOT overlap.
  */
-void falcon_poly_div_autoadj_fft(fpr *restrict a,
-	const fpr *restrict b, unsigned logn);
+void falcon_poly_div_autoadj_fft(fpr * a,
+	const fpr * b, unsigned logn);
 
 /*
  * Apply "split" operation on a polynomial in FFT representation:
  * f = f0(x^2) + x*f1(x^2), for half-size polynomials f0 and f1
  * (polynomials modulo X^(N/2)+1). f0, f1 and f MUST NOT overlap.
  */
-void falcon_poly_split_fft(fpr *restrict t0, fpr *restrict t1,
-	const fpr *restrict f, unsigned logn);
+void falcon_poly_split_fft(fpr * t0, fpr * t1,
+	const fpr * f, unsigned logn);
 
 /*
  * Apply "merge" operation on two polynomials in FFT representation:
@@ -495,8 +495,8 @@ void falcon_poly_split_fft(fpr *restrict t0, fpr *restrict t1,
  * f = f0(x^2) + x*f1(x^2), in FFT representation modulo X^N+1.
  * f MUST NOT overlap with either f0 or f1.
  */
-void falcon_poly_merge_fft(fpr *restrict f,
-	const fpr *restrict f0, const fpr *restrict f1, unsigned logn);
+void falcon_poly_merge_fft(fpr * f,
+	const fpr * f0, const fpr * f1, unsigned logn);
 
 /*
  * FFT3 (falcon-fft.c).
@@ -534,7 +534,7 @@ void falcon_iFFT3(fpr *f, unsigned logn, unsigned full);
  * Add polynomial b to polynomial a. a and b MUST NOT overlap. This
  * function works in normal representation.
  */
-void falcon_poly_add3(fpr *restrict a, const fpr *restrict b,
+void falcon_poly_add3(fpr * a, const fpr * b,
 	unsigned logn, unsigned full);
 
 /*
@@ -559,7 +559,7 @@ void falcon_poly_addconst_fft3(fpr *a, fpr x, unsigned logn, unsigned full);
  * Subtract polynomial b from polynomial a. a and b MUST NOT overlap. This
  * function works in normal representation.
  */
-void falcon_poly_sub3(fpr *restrict a, const fpr *restrict b,
+void falcon_poly_sub3(fpr * a, const fpr * b,
 	unsigned logn, unsigned full);
 
 /*
@@ -587,7 +587,7 @@ void falcon_poly_adj_fft3(fpr *a, unsigned logn, unsigned full);
  * We do not define falcon_poly_mul3() because implementation must use
  * extra temporary storage.
  *
-void falcon_poly_mul3(fpr *restrict a, const fpr *restrict b,
+void falcon_poly_mul3(fpr * a, const fpr * b,
 	unsigned logn, unsigned full);
  */
 
@@ -595,14 +595,14 @@ void falcon_poly_mul3(fpr *restrict a, const fpr *restrict b,
  * Multiply polynomial a with polynomial b. a and b MUST NOT overlap.
  * This function works in FFT3 representation.
  */
-void falcon_poly_mul_fft3(fpr *restrict a,
-	const fpr *restrict b, unsigned logn, unsigned full);
+void falcon_poly_mul_fft3(fpr * a,
+	const fpr * b, unsigned logn, unsigned full);
 
 /*
  * We do not define falcon_poly_sqr() because implementation must use
  * extra temporary storage.
  *
-void falcon_poly_sqr3(fpr *restrict a, const fpr *restrict b,
+void falcon_poly_sqr3(fpr * a, const fpr * b,
 	unsigned logn, unsigned full);
  */
 
@@ -615,8 +615,8 @@ void falcon_poly_sqr_fft3(fpr *a, unsigned logn, unsigned full);
  * Multiply polynomial a with the adjoint of polynomial b. a and b MUST NOT
  * overlap. This function works in FFT3 representation.
  */
-void falcon_poly_muladj_fft3(fpr *restrict a,
-	const fpr *restrict b, unsigned logn, unsigned full);
+void falcon_poly_muladj_fft3(fpr * a,
+	const fpr * b, unsigned logn, unsigned full);
 
 /*
  * Multiply polynomial with its own adjoint. This function works in FFT3
@@ -645,15 +645,15 @@ void falcon_poly_inv_fft3(fpr *a, unsigned logn, unsigned full);
  * Divide polynomial a by polynomial b, modulo X^N-X^(N/2)+1 (FFT3
  * representation). a and b MUST NOT overlap.
  */
-void falcon_poly_div_fft3(fpr *restrict a,
-	const fpr *restrict b, unsigned logn, unsigned full);
+void falcon_poly_div_fft3(fpr * a,
+	const fpr * b, unsigned logn, unsigned full);
 
 /*
  * Divide polynomial a by polynomial adj(b), modulo X^N-X^(N/2)+1 (FFT3
  * representation). a and b MUST NOT overlap.
  */
-void falcon_poly_divadj_fft3(fpr *restrict a,
-	const fpr *restrict b, unsigned logn, unsigned full);
+void falcon_poly_divadj_fft3(fpr * a,
+	const fpr * b, unsigned logn, unsigned full);
 
 /*
  * Given f and g (in FFT representation), compute 1/(f*adj(f)+g*adj(g))
@@ -663,8 +663,8 @@ void falcon_poly_divadj_fft3(fpr *restrict a,
  *
  * Array d MUST NOT overlap with either a or b.
  */
-void falcon_poly_invnorm2_fft3(fpr *restrict d,
-	const fpr *restrict a, const fpr *restrict b,
+void falcon_poly_invnorm2_fft3(fpr * d,
+	const fpr * a, const fpr * b,
 	unsigned logn, unsigned full);
 
 /*
@@ -672,9 +672,9 @@ void falcon_poly_invnorm2_fft3(fpr *restrict d,
  * (also in FFT3 representation). Destination d MUST NOT overlap with
  * any of the source arrays.
  */
-void falcon_poly_add_muladj_fft3(fpr *restrict d,
-	const fpr *restrict F, const fpr *restrict G,
-	const fpr *restrict f, const fpr *restrict g,
+void falcon_poly_add_muladj_fft3(fpr * d,
+	const fpr * F, const fpr * G,
+	const fpr * f, const fpr * g,
 	unsigned logn, unsigned full);
 
 /*
@@ -683,8 +683,8 @@ void falcon_poly_add_muladj_fft3(fpr *restrict d,
  * FFT3 coefficients are real, and the array b contains only N/2 elements.
  * a and b MUST NOT overlap.
  */
-void falcon_poly_mul_autoadj_fft3(fpr *restrict a,
-	const fpr *restrict b, unsigned logn, unsigned full);
+void falcon_poly_mul_autoadj_fft3(fpr * a,
+	const fpr * b, unsigned logn, unsigned full);
 
 /*
  * Divide polynomial a by polynomial b, where b is autoadjoint. Both
@@ -692,8 +692,8 @@ void falcon_poly_mul_autoadj_fft3(fpr *restrict a,
  * FFT3 coefficients are real, and the array b contains only N/2 elements.
  * a and b MUST NOT overlap.
  */
-void falcon_poly_div_autoadj_fft3(fpr *restrict a,
-	const fpr *restrict b, unsigned logn, unsigned full);
+void falcon_poly_div_autoadj_fft3(fpr * a,
+	const fpr * b, unsigned logn, unsigned full);
 
 /*
  * Apply "split" operation on a polynomial in FFT3 representation:
@@ -703,8 +703,8 @@ void falcon_poly_div_autoadj_fft3(fpr *restrict a,
  * requires that logn >= 2.
  */
 void falcon_poly_split_top_fft3(
-	fpr *restrict f0, fpr *restrict f1, fpr *restrict f2,
-	const fpr *restrict f, unsigned logn);
+	fpr * f0, fpr * f1, fpr * f2,
+	const fpr * f, unsigned logn);
 
 /*
  * Apply "split" operation on a polynomial in FFT3 representation:
@@ -714,23 +714,23 @@ void falcon_poly_split_top_fft3(
  * If logn == 1, then *f0 and *f1 are filled with a single real value
  * each.
  */
-void falcon_poly_split_deep_fft3(fpr *restrict f0, fpr *restrict f1,
-	const fpr *restrict f, unsigned logn);
+void falcon_poly_split_deep_fft3(fpr * f0, fpr * f1,
+	const fpr * f, unsigned logn);
 
 /*
  * Apply "merge" operation on three polynomials in FFT3 representation.
  * This is the opposite of falcon_poly_split_top_fft3().
  */
-void falcon_poly_merge_top_fft3(fpr *restrict f,
-	const fpr *restrict f0, const fpr *restrict f1, const fpr *restrict f2,
+void falcon_poly_merge_top_fft3(fpr * f,
+	const fpr * f0, const fpr * f1, const fpr * f2,
 	unsigned logn);
 
 /*
  * Apply "merge" operation on two polynomials in FFT3 representation.
  * This is the opposite of falcon_poly_split_deep_fft3().
  */
-void falcon_poly_merge_deep_fft3(fpr *restrict f,
-	const fpr *restrict f0, const fpr *restrict f1, unsigned logn);
+void falcon_poly_merge_deep_fft3(fpr * f,
+	const fpr * f0, const fpr * f1, unsigned logn);
 
 /* ==================================================================== */
 /*

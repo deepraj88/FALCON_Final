@@ -110,7 +110,7 @@ void shake_flip(shake_context *sc);
  * can be made, yielding the next bytes of the conceptually infinite
  * output.
  */
-void shake_extract(shake_context *sc, void *out, size_t len);
+void shake_extract(shake_context *sc, unsigned char *out, size_t len);
 
 /* ==================================================================== */
 

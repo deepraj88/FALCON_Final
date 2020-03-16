@@ -114,9 +114,9 @@
  * between the constant inputs (g00, g01 and g11).
  */
 static void
-LDL_fft(fpr *restrict d11, fpr *restrict l10,
-	const fpr *restrict g00, const fpr *restrict g01,
-	const fpr *restrict g11, unsigned logn, fpr *restrict tmp)
+LDL_fft(fpr * d11, fpr * l10,
+	const fpr * g00, const fpr * g01,
+	const fpr * g11, unsigned logn, fpr * tmp)
 {
 	size_t n;
 
@@ -141,9 +141,9 @@ LDL_fft(fpr *restrict d11, fpr *restrict l10,
  * Special case of LDL when G is quasicyclic, i.e. g11 == g00.
  */
 static inline void
-LDLqc_fft(fpr *restrict d11, fpr *restrict l10,
-	const fpr *restrict g00, const fpr *restrict g01, unsigned logn,
-	fpr *restrict tmp)
+LDLqc_fft(fpr * d11, fpr * l10,
+	const fpr * g00, const fpr * g01, unsigned logn,
+	fpr * tmp)
 {
 	LDL_fft(d11, l10, g00, g01, g00, logn, tmp);
 }
@@ -175,8 +175,8 @@ ffLDL_treesize(unsigned logn)
  * tmp[] must have room for at least two polynomials.
  */
 static void
-ffLDL_fft_inner(fpr *restrict tree,
-	fpr *restrict g0, fpr *restrict g1, unsigned logn, fpr *restrict tmp)
+ffLDL_fft_inner(fpr * tree,
+	fpr * g0, fpr * g1, unsigned logn, fpr * tmp)
 {
 	size_t n, hn;
 
@@ -225,9 +225,9 @@ ffLDL_fft_inner(fpr *restrict tree,
  * polynomials of 2^logn elements each.
  */
 static void
-ffLDL_fft(fpr *restrict tree, const fpr *restrict g00,
-	const fpr *restrict g01, const fpr *restrict g11,
-	unsigned logn, fpr *restrict tmp)
+ffLDL_fft(fpr * tree, const fpr * g00,
+	const fpr * g01, const fpr * g11,
+	unsigned logn, fpr * tmp)
 {
 	size_t n, hn;
 	fpr *d00, *d11;
@@ -325,9 +325,9 @@ ffLDL_binary_normalize(fpr *tree, fpr sigma, unsigned logn)
  * Overlap allowed only between the constant inputs (g00, g10, g11).
  */
 static void
-LDL_dim2_fft3(fpr *restrict d11, fpr *restrict l10,
-	const fpr *restrict g00, const fpr *restrict g10,
-	const fpr *restrict g11, unsigned logn, unsigned full)
+LDL_dim2_fft3(fpr * d11, fpr * l10,
+	const fpr * g00, const fpr * g10,
+	const fpr * g11, unsigned logn, unsigned full)
 {
 	size_t n;
 
@@ -368,12 +368,12 @@ LDL_dim2_fft3(fpr *restrict d11, fpr *restrict l10,
  * tmp[] must have room for one polynomial.
  */
 static void
-LDL_dim3_fft3(fpr *restrict d11, fpr *restrict d22,
-	fpr *restrict l10, fpr *restrict l20, fpr *restrict l21,
-	const fpr *restrict g00, const fpr *restrict g10,
-	const fpr *restrict g11, const fpr *restrict g20,
-	const fpr *restrict g21, const fpr *restrict g22,
-	unsigned logn, unsigned full, fpr *restrict tmp)
+LDL_dim3_fft3(fpr * d11, fpr * d22,
+	fpr * l10, fpr * l20, fpr * l21,
+	const fpr * g00, const fpr * g10,
+	const fpr * g11, const fpr * g20,
+	const fpr * g21, const fpr * g22,
+	unsigned logn, unsigned full, fpr * tmp)
 {
 	size_t n;
 
@@ -418,9 +418,9 @@ LDL_dim3_fft3(fpr *restrict d11, fpr *restrict d22,
 }
 
 static size_t
-ffLDL_inner_fft3(fpr *restrict tree, const fpr *restrict g00,
-	const fpr *restrict g10, const fpr *restrict g11,
-	unsigned logn, fpr *restrict tmp)
+ffLDL_inner_fft3(fpr * tree, const fpr * g00,
+	const fpr * g10, const fpr * g11,
+	unsigned logn, fpr * tmp)
 {
 	size_t n, hn, s;
 	fpr *t0, *t1, *t2;
@@ -471,10 +471,10 @@ ffLDL_inner_fft3(fpr *restrict tree, const fpr *restrict g00,
 }
 
 static size_t
-ffLDL_depth1_fft3(fpr *restrict tree, const fpr *restrict g00,
-	const fpr *restrict g10, const fpr *restrict g11,
-	const fpr *restrict g20, const fpr *restrict g21,
-	const fpr *restrict g22, unsigned logn, fpr *restrict tmp)
+ffLDL_depth1_fft3(fpr * tree, const fpr * g00,
+	const fpr * g10, const fpr * g11,
+	const fpr * g20, const fpr * g21,
+	const fpr * g22, unsigned logn, fpr * tmp)
 {
 	/*
 	 * At depth 1, we perform a bisection on the elements of the
@@ -526,9 +526,9 @@ ffLDL_depth1_fft3(fpr *restrict tree, const fpr *restrict g00,
 }
 
 static size_t
-ffLDL_fft3(fpr *restrict tree, const fpr *restrict g00,
-	const fpr *restrict g10, const fpr *restrict g11,
-	unsigned logn, fpr *restrict tmp)
+ffLDL_fft3(fpr * tree, const fpr * g00,
+	const fpr * g10, const fpr * g11,
+	unsigned logn, fpr * tmp)
 {
 	size_t n, tn, s;
 	fpr *l10, *d11, *t0, *t1, *t2, *t3;
@@ -696,10 +696,10 @@ skoff_tree(unsigned logn, unsigned ter)
  * tmp[] must have room for at least seven polynomials.
  */
 static void
-load_skey(fpr *restrict sk, unsigned q,
+load_skey(fpr * sk, unsigned q,
 	const int16_t *f_src, const int16_t *g_src,
 	const int16_t *F_src, const int16_t *G_src,
-	unsigned logn, unsigned ter, fpr *restrict tmp)
+	unsigned logn, unsigned ter, fpr * tmp)
 {
 	size_t n;
 	fpr *f, *g, *F, *G;
@@ -854,10 +854,10 @@ typedef int (*samplerZ)(void *ctx, fpr mu, fpr sigma);
  */
 static void
 ffSampling_fft(samplerZ samp, void *samp_ctx,
-	fpr *restrict z0, fpr *restrict z1,
-	const fpr *restrict tree,
-	const fpr *restrict t0, const fpr *restrict t1, unsigned logn,
-	fpr *restrict tmp)
+	fpr * z0, fpr * z1,
+	const fpr * tree,
+	const fpr * t0, const fpr * t1, unsigned logn,
+	fpr * tmp)
 {
 	size_t n, hn;
 	const fpr *tree0, *tree1;
@@ -907,10 +907,10 @@ ffSampling_fft(samplerZ samp, void *samp_ctx,
 
 static void
 ffSampling_inner_fft3(samplerZ samp, void *samp_ctx,
-	fpr *restrict z0, fpr *restrict z1,
-	const fpr *restrict tree,
-	const fpr *restrict t0, const fpr *restrict t1,
-	unsigned logn, fpr *restrict tmp)
+	fpr * z0, fpr * z1,
+	const fpr * tree,
+	const fpr * t0, const fpr * t1,
+	unsigned logn, fpr * tmp)
 {
 	size_t n, hn;
 	fpr *x0, *x1, *y0, *y1;
@@ -987,10 +987,10 @@ ffSampling_inner_fft3(samplerZ samp, void *samp_ctx,
 
 static void
 ffSampling_depth1_fft3(samplerZ samp, void *samp_ctx,
-	fpr *restrict z0, fpr *restrict z1, fpr *restrict z2,
-	const fpr *restrict tree,
-	const fpr *restrict t0, const fpr *restrict t1, const fpr *restrict t2,
-	unsigned logn, fpr *restrict tmp)
+	fpr * z0, fpr * z1, fpr * z2,
+	const fpr * tree,
+	const fpr * t0, const fpr * t1, const fpr * t2,
+	unsigned logn, fpr * tmp)
 {
 	size_t n, hn;
 	fpr *x0, *x1, *y0, *y1;
@@ -1073,10 +1073,10 @@ ffSampling_depth1_fft3(samplerZ samp, void *samp_ctx,
 
 static void
 ffSampling_fft3(samplerZ samp, void *samp_ctx,
-	fpr *restrict z0, fpr *restrict z1,
-	const fpr *restrict tree,
-	const fpr *restrict t0, const fpr *restrict t1, unsigned logn,
-	fpr *restrict tmp)
+	fpr * z0, fpr * z1,
+	const fpr * tree,
+	const fpr * t0, const fpr * t1, unsigned logn,
+	fpr * tmp)
 {
 	size_t n, tn;
 	fpr *x0, *x1, *x2, *y0, *y1, *y2;
@@ -1139,9 +1139,9 @@ ffSampling_fft3(samplerZ samp, void *samp_ctx,
  */
 static void
 do_sign(samplerZ samp, void *samp_ctx,
-	int16_t *restrict s1, int16_t *restrict s2,
-	unsigned q, const fpr *restrict sk, const uint16_t *restrict hm,
-	unsigned logn, unsigned ter, fpr *restrict tmp)
+	int16_t * s1, int16_t * s2,
+	unsigned q, const fpr * sk, const uint16_t * hm,
+	unsigned logn, unsigned ter, fpr * tmp)
 {
 	size_t n, u;
 	fpr *t0, *t1, *tx, *ty, *tz;
